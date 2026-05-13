@@ -1,0 +1,28 @@
+# Godot 4 editor/cache files
+game/.godot/
+
+# Godot generated exports
+game/export.cfg
+game/export_credentials.cfg
+game/.import/
+game/*.translation
+
+# Node.js server
+server/node_modules/
+server/.env
+server/.env.*
+server/npm-debug.log*
+server/yarn-debug.log*
+server/yarn-error.log*
+server/pnpm-debug.log*
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
