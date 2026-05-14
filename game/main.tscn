@@ -1,8 +1,50 @@
-[gd_scene format=3 uid="uid://c6o56ry4yap0j"]
+[gd_scene load_steps=4 format=3 uid="uid://c6o56ry4yap0j"]
 
-[ext_resource type="Script" uid="uid://6t4gy4jfhm06" path="res://scripts/board_view.gd" id="1_board_view"]
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/board_view.gd" id="2_board_view"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="3_hud"]
 
 [node name="Main" type="Node2D" unique_id=1659134553]
+script = ExtResource("1_main")
 
 [node name="BoardView" type="Node2D" parent="." unique_id=1011226363]
-script = ExtResource("1_board_view")
+script = ExtResource("2_board_view")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("3_hud")
+
+[node name="Root" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/Root"]
+layout_mode = 1
+offset_left = 24.0
+offset_top = 18.0
+offset_right = 560.0
+offset_bottom = 126.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/Root/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TurnLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Turn: Player 1"
+
+[node name="ScoreLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Score: P1 0 / P2 0"
+
+[node name="StatusLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Player 1: place a node"
+
+[node name="HelpLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Left click: place node | Right click: break enemy node | Space: skip"
