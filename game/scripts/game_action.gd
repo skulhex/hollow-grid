@@ -15,6 +15,7 @@ var action_type := ""
 var player := ""
 var cell := Vector2i.ZERO
 var has_cell := false
+var invalid_shape := false
 
 
 func _init(start_action_type: String = "", start_player: String = "", start_cell: Vector2i = Vector2i.ZERO, start_has_cell: bool = false) -> void:
@@ -43,7 +44,13 @@ static func from_payload(payload: Dictionary) -> GameAction:
 	)
 
 	if payload.has(KEY_CELL):
-		parsed_action.cell = _parse_cell(payload[KEY_CELL])
+		var raw_cell: Variant = payload[KEY_CELL]
+
+		if not _is_valid_cell_payload(raw_cell):
+			parsed_action.invalid_shape = true
+			return parsed_action
+
+		parsed_action.cell = _parse_cell(raw_cell)
 		parsed_action.has_cell = true
 
 	return parsed_action
@@ -65,6 +72,9 @@ func to_payload() -> Dictionary:
 
 
 func is_valid_shape() -> bool:
+	if invalid_shape:
+		return false
+
 	if player.is_empty():
 		return false
 
@@ -78,10 +88,30 @@ static func _parse_cell(raw_cell: Variant) -> Vector2i:
 	if raw_cell is Vector2i:
 		return raw_cell
 
-	if raw_cell is Vector2:
-		return Vector2i(int(raw_cell.x), int(raw_cell.y))
-
 	if raw_cell is Dictionary:
 		return Vector2i(int(raw_cell.get(KEY_CELL_Q, 0)), int(raw_cell.get(KEY_CELL_R, 0)))
 
 	return Vector2i.ZERO
+
+
+static func _is_valid_cell_payload(raw_cell: Variant) -> bool:
+	if raw_cell is Vector2i:
+		return true
+
+	if raw_cell is Dictionary:
+		if not raw_cell.has(KEY_CELL_Q) or not raw_cell.has(KEY_CELL_R):
+			return false
+
+		return _is_int_like(raw_cell[KEY_CELL_Q]) and _is_int_like(raw_cell[KEY_CELL_R])
+
+	return false
+
+
+static func _is_int_like(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+
+	if typeof(value) == TYPE_FLOAT:
+		return is_equal_approx(value, round(value))
+
+	return false
