@@ -84,6 +84,37 @@ func can_place_node(cell: Vector2i) -> bool:
 	return has_active_neighbor(current_player, cell)
 
 
+func can_break_node(cell: Vector2i) -> bool:
+	if not contains_cell(cell):
+		return false
+
+	var object := get_object(cell)
+
+	if object.is_empty():
+		return false
+
+	if object.get("type") != OBJECT_NODE:
+		return false
+
+	if object.get("owner") == current_player:
+		return false
+
+	return has_active_neighbor(current_player, cell)
+
+
+func can_target_action(action_type: String, cell: Vector2i) -> bool:
+	if finished:
+		return false
+
+	match action_type:
+		GameAction.TYPE_PLACE_NODE:
+			return can_place_node(cell)
+		GameAction.TYPE_BREAK_NODE:
+			return can_break_node(cell)
+		_:
+			return false
+
+
 func contains_cell(cell: Vector2i) -> bool:
 	return abs(cell.x) <= board_radius and abs(cell.y) <= board_radius and abs(cell.x + cell.y) <= board_radius
 

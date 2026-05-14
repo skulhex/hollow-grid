@@ -1,8 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://c6o56ry4yap0j"]
+[gd_scene format=3 uid="uid://c6o56ry4yap0j"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="Script" path="res://scripts/board_view.gd" id="2_board_view"]
-[ext_resource type="Script" path="res://scripts/hud.gd" id="3_hud"]
+[ext_resource type="Script" uid="uid://dj32ncuud483c" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://6t4gy4jfhm06" path="res://scripts/board_view.gd" id="2_board_view"]
+[ext_resource type="Script" uid="uid://n746t6qbyyl8" path="res://scripts/hud.gd" id="3_hud"]
 
 [node name="Main" type="Node2D" unique_id=1659134553]
 script = ExtResource("1_main")
@@ -10,10 +10,10 @@ script = ExtResource("1_main")
 [node name="BoardView" type="Node2D" parent="." unique_id=1011226363]
 script = ExtResource("2_board_view")
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1302230406]
 script = ExtResource("3_hud")
 
-[node name="Root" type="Control" parent="HUD"]
+[node name="Root" type="Control" parent="HUD" unique_id=1292622886]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -22,29 +22,146 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="HUD/Root"]
+[node name="StatusPanel" type="PanelContainer" parent="HUD/Root"]
 layout_mode = 1
-offset_left = 24.0
+offset_left = 18.0
 offset_top = 18.0
-offset_right = 560.0
-offset_bottom = 126.0
+offset_right = 322.0
+offset_bottom = 128.0
+mouse_filter = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="HUD/Root/MarginContainer"]
+[node name="StatusMargin" type="MarginContainer" parent="HUD/Root/StatusPanel"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
 
-[node name="TurnLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+[node name="StatusVBox" type="VBoxContainer" parent="HUD/Root/StatusPanel/StatusMargin"]
 layout_mode = 2
-text = "Turn: Player 1"
+theme_override_constants/separation = 5
 
-[node name="ScoreLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+[node name="TurnLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
-text = "Score: P1 0 / P2 0"
+text = "Player 1"
 
-[node name="StatusLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+[node name="ScoreLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
+text = "P1 0  |  P2 0"
+
+[node name="SelectedLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+layout_mode = 2
+text = "Mode: Place Node"
+
+[node name="CommandPanel" type="PanelContainer" parent="HUD/Root"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -350.0
+offset_top = 148.0
+offset_right = -18.0
+offset_bottom = 510.0
+grow_horizontal = 0
+mouse_filter = 0
+
+[node name="CommandMargin" type="MarginContainer" parent="HUD/Root/CommandPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="CommandVBox" type="VBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CommandTitle" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+text = "COMMAND"
+
+[node name="PlaceRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlaceButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow"]
+custom_minimum_size = Vector2(230, 42)
+layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+text = "Place Node"
+
+[node name="PlaceKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow"]
+custom_minimum_size = Vector2(44, 42)
+layout_mode = 2
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BreakRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BreakButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/BreakRow"]
+custom_minimum_size = Vector2(230, 42)
+layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+text = "Break Node"
+
+[node name="BreakKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/BreakRow"]
+custom_minimum_size = Vector2(44, 42)
+layout_mode = 2
+text = "2"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CommandSeparator" type="HSeparator" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+
+[node name="SkipRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SkipButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow"]
+custom_minimum_size = Vector2(230, 50)
+layout_mode = 2
+focus_mode = 0
+text = "Pass Turn"
+
+[node name="SkipKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow"]
+custom_minimum_size = Vector2(44, 50)
+layout_mode = 2
+text = "Space"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MessageSeparator" type="HSeparator" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+layout_mode = 2
+size_flags_vertical = 3
 text = "Player 1: place a node"
+autowrap_mode = 3
 
-[node name="HelpLabel" type="Label" parent="HUD/Root/MarginContainer/VBoxContainer"]
+[node name="UtilityRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
 layout_mode = 2
-text = "Left click: place node | Right click: break enemy node | Space: skip"
+theme_override_constants/separation = 8
+
+[node name="UtilitySpacer" type="Control" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RestartButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow"]
+custom_minimum_size = Vector2(132, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Restart"
+
+[node name="RestartKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow"]
+custom_minimum_size = Vector2(32, 30)
+layout_mode = 2
+text = "R"
+horizontal_alignment = 1
+vertical_alignment = 1

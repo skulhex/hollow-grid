@@ -6,6 +6,7 @@ const HOVER_NONE := Vector2i(999, 999)
 var grid: HexGrid
 var match_state: MatchState
 var hover_cell := HOVER_NONE
+var selected_action_type := GameAction.TYPE_PLACE_NODE
 
 
 func _ready() -> void:
@@ -17,6 +18,14 @@ func setup(start_grid: HexGrid, start_match_state: MatchState) -> void:
 	grid = start_grid
 	match_state = start_match_state
 	hover_cell = HOVER_NONE
+	queue_redraw()
+
+
+func set_selected_action_type(action_type: String) -> void:
+	if action_type == selected_action_type:
+		return
+
+	selected_action_type = action_type
 	queue_redraw()
 
 
@@ -56,12 +65,20 @@ func _draw_cells() -> void:
 			fill = Color(0.17, 0.145, 0.075)
 			outline = Color(0.72, 0.58, 0.22)
 
+		var is_valid_target := match_state.can_target_action(selected_action_type, cell)
+
+		if is_valid_target:
+			var target_color := _target_color()
+			fill = target_color.darkened(0.72)
+			outline = target_color.darkened(0.22)
+
 		if cell == hover_cell:
-			fill = fill.lightened(0.22)
-			outline = Color(0.88, 0.9, 0.92)
-		elif match_state.can_place_node(cell):
-			fill = GameDefs.player_color(match_state.current_player).darkened(0.72)
-			outline = GameDefs.player_color(match_state.current_player).darkened(0.3)
+			if is_valid_target:
+				fill = fill.lightened(0.3)
+				outline = Color(0.94, 0.97, 1.0)
+			else:
+				fill = fill.lightened(0.08)
+				outline = Color(0.43, 0.47, 0.52)
 
 		_draw_hex(center, grid.hex_size - 3.0, fill, outline, 2.0)
 
@@ -112,6 +129,9 @@ func _draw_objects() -> void:
 			draw_circle(center, 18.0, color)
 			draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
 
+		if match_state.can_target_action(selected_action_type, cell):
+			draw_arc(center, 25.0, 0.0, TAU, 48, _target_color().lightened(0.18), 3.0, true)
+
 
 func _draw_hex(center: Vector2, radius: float, fill: Color, outline: Color, width: float) -> void:
 	var points := PackedVector2Array()
@@ -129,3 +149,10 @@ func _draw_hex(center: Vector2, radius: float, fill: Color, outline: Color, widt
 
 func _cell_to_screen(cell: Vector2i) -> Vector2:
 	return grid.cell_to_screen(cell, get_viewport_rect().size)
+
+
+func _target_color() -> Color:
+	if selected_action_type == GameAction.TYPE_BREAK_NODE:
+		return Color(1.0, 0.62, 0.22)
+
+	return GameDefs.player_color(match_state.current_player)
