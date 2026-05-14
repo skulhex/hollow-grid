@@ -16,7 +16,10 @@ static func player_label(player: String) -> String:
 	if player == PLAYER_ONE:
 		return "Player 1"
 
-	return "Player 2"
+	if player == PLAYER_TWO:
+		return "Player 2"
+
+	return player
 
 
 static func other_player(player: String) -> String:

@@ -24,8 +24,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		_handle_click(event)
 	elif event.is_action_pressed("ui_accept"):
-		match_state.skip_turn()
-		_refresh()
+		_submit_action(GameAction.skip(match_state.current_player))
 
 
 func _handle_click(event: InputEventMouseButton) -> void:
@@ -38,13 +37,17 @@ func _handle_click(event: InputEventMouseButton) -> void:
 		return
 
 	if event.button_index == MOUSE_BUTTON_LEFT:
-		match_state.place_node(cell)
+		_submit_action(GameAction.place_node(match_state.current_player, cell))
 	elif event.button_index == MOUSE_BUTTON_RIGHT:
-		match_state.break_node(cell)
+		_submit_action(GameAction.break_node(match_state.current_player, cell))
 	else:
 		return
 
+
+func _submit_action(action: GameAction) -> Dictionary:
+	var result := match_state.apply_action(action.to_payload())
 	_refresh()
+	return result
 
 
 func _update_hover(mouse_position: Vector2) -> void:
