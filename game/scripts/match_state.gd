@@ -4,6 +4,8 @@ extends RefCounted
 const OBJECT_CORE := "core"
 const OBJECT_NODE := "node"
 
+const CONTROL_POINT := Vector2i(0, 0)
+
 const MAX_ENERGY := 3
 const START_ENERGY := 1
 const TURN_ENERGY_GAIN := 1
@@ -97,6 +99,9 @@ func can_place_node(cell: Vector2i) -> bool:
 	if not contains_cell(cell):
 		return false
 
+	if is_control_point(cell):
+		return false
+
 	if has_object(cell):
 		return false
 
@@ -163,6 +168,50 @@ func action_energy_requirement_message(action_type: String) -> String:
 		action_cost(action_type),
 		_action_verb(action_type),
 	]
+
+
+func is_control_point(cell: Vector2i) -> bool:
+	return cell == CONTROL_POINT
+
+
+func control_point_owner(cell: Vector2i) -> String:
+	if not is_control_point(cell):
+		return ""
+
+	var player_one_influence := control_point_influence(cell, GameDefs.PLAYER_ONE)
+	var player_two_influence := control_point_influence(cell, GameDefs.PLAYER_TWO)
+
+	if player_one_influence > player_two_influence:
+		return GameDefs.PLAYER_ONE
+
+	if player_two_influence > player_one_influence:
+		return GameDefs.PLAYER_TWO
+
+	return ""
+
+
+func control_point_influence(cell: Vector2i, player: String) -> int:
+	if not is_control_point(cell):
+		return 0
+
+	var influence := 0
+
+	for direction in HexGrid.DIRECTIONS:
+		var object := get_object(cell + direction)
+
+		if object.is_empty():
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		if not object.get("active", false):
+			continue
+
+		if object.get("type") == OBJECT_NODE or object.get("type") == OBJECT_CORE:
+			influence += 1
+
+	return influence
 
 
 func contains_cell(cell: Vector2i) -> bool:
@@ -272,12 +321,7 @@ func _end_turn(message: String) -> void:
 
 
 func _score_control_point() -> void:
-	var center_object := get_object(Vector2i.ZERO)
-
-	if center_object.is_empty():
-		return
-
-	if center_object.get("type") == OBJECT_NODE and center_object.get("owner") == current_player and center_object.get("active", false):
+	if control_point_owner(CONTROL_POINT) == current_player:
 		scores[current_player] += 1
 
 

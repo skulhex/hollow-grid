@@ -61,9 +61,10 @@ func _draw_cells() -> void:
 		var fill := Color(0.095, 0.112, 0.132)
 		var outline := Color(0.22, 0.25, 0.29)
 
-		if cell == Vector2i.ZERO:
-			fill = Color(0.17, 0.145, 0.075)
-			outline = Color(0.72, 0.58, 0.22)
+		if match_state.is_control_point(cell):
+			var control_color := _control_point_color(cell)
+			fill = control_color.darkened(0.62)
+			outline = control_color
 
 		var is_valid_target := match_state.can_target_action(selected_action_type, cell)
 
@@ -82,8 +83,11 @@ func _draw_cells() -> void:
 
 		_draw_hex(center, grid.hex_size - 3.0, fill, outline, 2.0)
 
-	if grid.contains(Vector2i.ZERO):
-		draw_circle(_cell_to_screen(Vector2i.ZERO), 9.0, Color(0.95, 0.78, 0.28))
+	if grid.contains(MatchState.CONTROL_POINT):
+		var center := _cell_to_screen(MatchState.CONTROL_POINT)
+		var control_color := _control_point_color(MatchState.CONTROL_POINT)
+		draw_circle(center, 10.0, control_color)
+		draw_arc(center, 20.0, 0.0, TAU, 48, control_color.lightened(0.18), 3.0, true)
 
 
 func _draw_links() -> void:
@@ -156,3 +160,12 @@ func _target_color() -> Color:
 		return Color(1.0, 0.62, 0.22)
 
 	return GameDefs.player_color(match_state.current_player)
+
+
+func _control_point_color(cell: Vector2i) -> Color:
+	var owner := match_state.control_point_owner(cell)
+
+	if owner.is_empty():
+		return Color(0.95, 0.78, 0.28)
+
+	return GameDefs.player_color(owner)
