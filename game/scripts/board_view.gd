@@ -120,18 +120,28 @@ func _draw_objects() -> void:
 			continue
 
 		var center := _cell_to_screen(cell)
-		var owner: String = object["owner"]
-		var color := GameDefs.player_color(owner)
+		var object_owner: String = object["owner"]
+		var color := GameDefs.player_color(object_owner)
+		var is_disabled := bool(object.get("disabled", false))
 
 		if object["type"] == MatchState.OBJECT_CORE:
 			_draw_hex(center, 24.0, color, Color(0.95, 0.97, 1.0), 3.0)
 			draw_circle(center, 8.0, Color(0.95, 0.97, 1.0))
 		else:
-			if not object.get("active", false):
+			if is_disabled:
+				color = Color(0.22, 0.235, 0.255)
+			elif not object.get("active", false):
 				color = color.darkened(0.52)
 
 			draw_circle(center, 18.0, color)
-			draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
+
+			if is_disabled:
+				var disabled_outline := Color(0.58, 0.62, 0.68)
+				draw_arc(center, 18.0, 0.0, TAU, 48, disabled_outline, 2.5, true)
+				draw_line(center + Vector2(-8.0, -8.0), center + Vector2(8.0, 8.0), disabled_outline, 3.0, true)
+				draw_line(center + Vector2(8.0, -8.0), center + Vector2(-8.0, 8.0), disabled_outline, 3.0, true)
+			else:
+				draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
 
 		if match_state.can_target_action(selected_action_type, cell):
 			draw_arc(center, 25.0, 0.0, TAU, 48, _target_color().lightened(0.18), 3.0, true)
@@ -163,9 +173,9 @@ func _target_color() -> Color:
 
 
 func _control_point_color(cell: Vector2i) -> Color:
-	var owner := match_state.control_point_owner(cell)
+	var control_owner := match_state.control_point_owner(cell)
 
-	if owner.is_empty():
+	if control_owner.is_empty():
 		return Color(0.95, 0.78, 0.28)
 
-	return GameDefs.player_color(owner)
+	return GameDefs.player_color(control_owner)

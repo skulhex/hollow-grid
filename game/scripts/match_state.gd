@@ -122,6 +122,9 @@ func can_break_node(cell: Vector2i) -> bool:
 	if object.get("type") != OBJECT_NODE:
 		return false
 
+	if object.get("disabled", false):
+		return false
+
 	if object.get("owner") == current_player:
 		return false
 
@@ -207,6 +210,9 @@ func control_point_influence(cell: Vector2i, player: String) -> int:
 		if object.get("owner") != player:
 			continue
 
+		if object.get("disabled", false):
+			continue
+
 		if not object.get("active", false):
 			continue
 
@@ -225,6 +231,9 @@ func has_active_neighbor(owner: String, cell: Vector2i) -> bool:
 		var neighbor_object := get_object(cell + direction)
 
 		if neighbor_object.is_empty():
+			continue
+
+		if neighbor_object.get("disabled", false):
 			continue
 
 		if neighbor_object.get("owner") == owner and neighbor_object.get("active", false):
@@ -267,7 +276,7 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 
 	var object := get_object(action.cell)
 
-	if object.is_empty() or object.get("type") != OBJECT_NODE or object.get("owner") == current_player:
+	if object.is_empty() or object.get("type") != OBJECT_NODE or object.get("disabled", false) or object.get("owner") == current_player:
 		status_message = "%s cannot break that cell" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
@@ -280,8 +289,9 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 		return _result(false, status_message, action)
 
 	_spend_energy(current_player, BREAK_NODE_COST)
-	objects.erase(cell_key(action.cell))
-	_complete_successful_action(action, "%s broke an enemy node" % GameDefs.player_label(current_player))
+	objects[cell_key(action.cell)]["disabled"] = true
+	objects[cell_key(action.cell)]["active"] = false
+	_complete_successful_action(action, "%s disabled an enemy node" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
 
@@ -379,7 +389,7 @@ func _winner() -> String:
 
 func _update_active_nodes() -> void:
 	for key in objects.keys():
-		objects[key]["active"] = objects[key]["type"] == OBJECT_CORE
+		objects[key]["active"] = objects[key]["type"] == OBJECT_CORE and not objects[key].get("disabled", false)
 
 	_mark_active_network(GameDefs.PLAYER_ONE)
 	_mark_active_network(GameDefs.PLAYER_TWO)
@@ -416,6 +426,9 @@ func _mark_active_network(owner: String) -> void:
 			if neighbor_object["owner"] != owner:
 				continue
 
+			if neighbor_object.get("disabled", false):
+				continue
+
 			visited[key] = true
 			queue.append(neighbor)
 
@@ -426,6 +439,7 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 		"type": type,
 		"owner": owner,
 		"active": type == OBJECT_CORE,
+		"disabled": false,
 	}
 
 
