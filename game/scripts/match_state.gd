@@ -28,6 +28,7 @@ var current_player := GameDefs.PLAYER_ONE
 var finished := false
 var status_message := "Player 1: place a node"
 var turn_number := 1
+var round_number := 1
 var move_history: Array[Dictionary] = []
 
 
@@ -46,6 +47,7 @@ func setup_match() -> void:
 	finished = false
 	status_message = "%s: place a node" % GameDefs.player_label(current_player)
 	turn_number = 1
+	round_number = 1
 	move_history.clear()
 	_grant_energy(current_player, TURN_ENERGY_GAIN)
 
@@ -291,7 +293,7 @@ func _apply_skip(action: GameAction) -> Dictionary:
 
 func _complete_successful_action(action: GameAction, message: String) -> void:
 	_record_move(action, message)
-	_end_turn(message)
+	_end_turn(action, message)
 	turn_number += 1
 
 
@@ -304,25 +306,75 @@ func _record_move(action: GameAction, message: String) -> void:
 		"cell": action.cell,
 		"message": message,
 		"energy_after": energy[action.player],
+		"round": round_number,
 	})
 
 
-func _end_turn(message: String) -> void:
+func _end_turn(action: GameAction, message: String) -> void:
 	_update_active_nodes()
-	_score_control_point()
+	var final_message := message
 
-	if scores[current_player] >= 5:
+	if action.player == GameDefs.PLAYER_TWO:
+		var score_result := _score_round()
+		_annotate_last_move(score_result)
+		final_message = "%s. %s" % [message, _score_result_message(score_result)]
+		round_number += 1
+
+	var winner := _winner()
+	if not winner.is_empty():
 		finished = true
-		status_message = "%s wins" % GameDefs.player_label(current_player)
+		status_message = "%s. %s wins" % [final_message, GameDefs.player_label(winner)]
 	else:
-		status_message = message
+		status_message = final_message
 		current_player = GameDefs.other_player(current_player)
 		_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 
-func _score_control_point() -> void:
-	if control_point_owner(CONTROL_POINT) == current_player:
-		scores[current_player] += 1
+func _score_round() -> Dictionary:
+	var owner := control_point_owner(CONTROL_POINT)
+	var score_awarded := 0
+
+	if not owner.is_empty():
+		scores[owner] += 1
+		score_awarded = 1
+
+	return {
+		"round": round_number,
+		"scored_player": owner,
+		"score_awarded": score_awarded,
+	}
+
+
+func _score_result_message(score_result: Dictionary) -> String:
+	var scored_player: String = score_result.get("scored_player", "")
+
+	if scored_player.is_empty():
+		return "Round tied: no score"
+
+	return "Round scored: %s +%d" % [
+		GameDefs.player_label(scored_player),
+		int(score_result.get("score_awarded", 0)),
+	]
+
+
+func _annotate_last_move(score_result: Dictionary) -> void:
+	if move_history.is_empty():
+		return
+
+	var last_index := move_history.size() - 1
+	move_history[last_index]["round"] = score_result["round"]
+	move_history[last_index]["scored_player"] = score_result["scored_player"]
+	move_history[last_index]["score_awarded"] = score_result["score_awarded"]
+
+
+func _winner() -> String:
+	if scores[GameDefs.PLAYER_ONE] >= 5:
+		return GameDefs.PLAYER_ONE
+
+	if scores[GameDefs.PLAYER_TWO] >= 5:
+		return GameDefs.PLAYER_TWO
+
+	return ""
 
 
 func _update_active_nodes() -> void:
