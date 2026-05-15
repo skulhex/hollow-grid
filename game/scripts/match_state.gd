@@ -13,6 +13,8 @@ var scores: Dictionary = {
 var current_player := GameDefs.PLAYER_ONE
 var finished := false
 var status_message := "Player 1: place a node"
+var turn_number := 1
+var move_history: Array[Dictionary] = []
 
 
 func _init(start_board_radius: int = 3) -> void:
@@ -27,6 +29,8 @@ func setup_match() -> void:
 	current_player = GameDefs.PLAYER_ONE
 	finished = false
 	status_message = "%s: place a node" % GameDefs.player_label(current_player)
+	turn_number = 1
+	move_history.clear()
 
 	_add_object(Vector2i(-board_radius, 0), OBJECT_CORE, GameDefs.PLAYER_ONE)
 	_add_object(Vector2i(board_radius, 0), OBJECT_CORE, GameDefs.PLAYER_TWO)
@@ -150,7 +154,7 @@ func _apply_place_node(action: GameAction) -> Dictionary:
 		return _result(false, status_message, action)
 
 	_add_object(action.cell, OBJECT_NODE, current_player)
-	_end_turn("%s placed a node" % GameDefs.player_label(current_player))
+	_complete_successful_action(action, "%s placed a node" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
 
@@ -170,13 +174,30 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 		return _result(false, status_message, action)
 
 	objects.erase(cell_key(action.cell))
-	_end_turn("%s broke an enemy node" % GameDefs.player_label(current_player))
+	_complete_successful_action(action, "%s broke an enemy node" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
 
 func _apply_skip(action: GameAction) -> Dictionary:
-	_end_turn("%s skipped" % GameDefs.player_label(current_player))
+	_complete_successful_action(action, "%s skipped" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
+
+
+func _complete_successful_action(action: GameAction, message: String) -> void:
+	_record_move(action, message)
+	_end_turn(message)
+	turn_number += 1
+
+
+func _record_move(action: GameAction, message: String) -> void:
+	move_history.append({
+		"turn": turn_number,
+		"player": action.player,
+		"type": action.action_type,
+		"has_cell": action.has_cell,
+		"cell": action.cell,
+		"message": message,
+	})
 
 
 func _end_turn(message: String) -> void:

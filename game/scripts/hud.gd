@@ -7,15 +7,28 @@ signal restart_requested
 
 @onready var status_panel: PanelContainer = $Root/StatusPanel
 @onready var command_panel: PanelContainer = $Root/CommandPanel
+@onready var history_panel: PanelContainer = $Root/HistoryPanel
 @onready var turn_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/TurnLabel
 @onready var score_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ScoreLabel
 @onready var selected_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/SelectedLabel
 @onready var command_title: Label = $Root/CommandPanel/CommandMargin/CommandVBox/CommandTitle
+@onready var history_title: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryTitle
 @onready var place_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceButton
 @onready var break_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakButton
 @onready var skip_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipButton
 @onready var restart_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow/RestartButton
 @onready var status_label: Label = $Root/CommandPanel/CommandMargin/CommandVBox/StatusLabel
+@onready var history_empty_label: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/HistoryEmptyLabel
+@onready var history_rows: Array[Label] = [
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move1Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move2Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move3Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move4Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move5Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move6Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move7Label,
+	$Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList/Move8Label,
+]
 @onready var key_labels: Array[Label] = [
 	$Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakKeyLabel,
@@ -51,20 +64,31 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 	else:
 		status_label.add_theme_color_override("font_color", Color(0.72, 0.76, 0.82))
 
+	_refresh_history(match_state.move_history)
+
 
 func _apply_theme() -> void:
 	status_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.07, 0.082, 0.098, 0.8)))
 	command_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.92)))
+	history_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.86)))
 
 	turn_label.add_theme_font_size_override("font_size", 20)
 	score_label.add_theme_font_size_override("font_size", 16)
 	selected_label.add_theme_font_size_override("font_size", 14)
 	command_title.add_theme_font_size_override("font_size", 13)
+	history_title.add_theme_font_size_override("font_size", 13)
 	status_label.add_theme_font_size_override("font_size", 15)
 
 	score_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	selected_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	command_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
+	history_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
+	history_empty_label.add_theme_font_size_override("font_size", 13)
+	history_empty_label.add_theme_color_override("font_color", Color(0.5, 0.55, 0.62))
+
+	for history_row in history_rows:
+		history_row.add_theme_font_size_override("font_size", 13)
+		history_row.add_theme_color_override("font_color", Color(0.82, 0.86, 0.9))
 
 	_style_action_button(place_button, Color(0.22, 0.58, 1.0))
 	_style_action_button(break_button, Color(1.0, 0.62, 0.22))
@@ -148,6 +172,58 @@ func _key_style() -> StyleBoxFlat:
 	style.corner_radius_bottom_left = 5
 	style.corner_radius_bottom_right = 5
 	return style
+
+
+func _refresh_history(move_history: Array[Dictionary]) -> void:
+	var start_index: int = maxi(0, move_history.size() - history_rows.size())
+	var visible_moves := move_history.slice(start_index)
+
+	history_empty_label.visible = visible_moves.is_empty()
+
+	for i in range(history_rows.size()):
+		var row := history_rows[i]
+
+		if i >= visible_moves.size():
+			row.visible = false
+			row.text = ""
+			continue
+
+		row.visible = true
+		row.text = _format_history_entry(visible_moves[i])
+
+
+func _format_history_entry(entry: Dictionary) -> String:
+	var label := _short_action_label(str(entry.get("type", "")))
+	var player := _short_player_label(str(entry.get("player", "")))
+	var text := "T%d %s %s" % [int(entry.get("turn", 0)), player, label]
+
+	if bool(entry.get("has_cell", false)):
+		var cell: Vector2i = entry.get("cell", Vector2i.ZERO)
+		text += " (%d, %d)" % [cell.x, cell.y]
+
+	return text
+
+
+func _short_action_label(action_type: String) -> String:
+	match action_type:
+		GameAction.TYPE_PLACE_NODE:
+			return "Place"
+		GameAction.TYPE_BREAK_NODE:
+			return "Break"
+		GameAction.TYPE_SKIP:
+			return "Skip"
+		_:
+			return action_type
+
+
+func _short_player_label(player: String) -> String:
+	if player == GameDefs.PLAYER_ONE:
+		return "P1"
+
+	if player == GameDefs.PLAYER_TWO:
+		return "P2"
+
+	return player
 
 
 func _on_place_pressed() -> void:
