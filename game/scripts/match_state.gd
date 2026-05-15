@@ -4,11 +4,23 @@ extends RefCounted
 const OBJECT_CORE := "core"
 const OBJECT_NODE := "node"
 
+const MAX_ENERGY := 3
+const START_ENERGY := 1
+const TURN_ENERGY_GAIN := 1
+const SKIP_ENERGY_GAIN := 1
+const PLACE_NODE_COST := 1
+const BREAK_NODE_COST := 2
+const SKIP_COST := 0
+
 var board_radius: int
 var objects: Dictionary = {}
 var scores: Dictionary = {
 	GameDefs.PLAYER_ONE: 0,
 	GameDefs.PLAYER_TWO: 0,
+}
+var energy: Dictionary = {
+	GameDefs.PLAYER_ONE: START_ENERGY,
+	GameDefs.PLAYER_TWO: START_ENERGY,
 }
 var current_player := GameDefs.PLAYER_ONE
 var finished := false
@@ -26,11 +38,14 @@ func setup_match() -> void:
 	objects.clear()
 	scores[GameDefs.PLAYER_ONE] = 0
 	scores[GameDefs.PLAYER_TWO] = 0
+	energy[GameDefs.PLAYER_ONE] = START_ENERGY
+	energy[GameDefs.PLAYER_TWO] = START_ENERGY
 	current_player = GameDefs.PLAYER_ONE
 	finished = false
 	status_message = "%s: place a node" % GameDefs.player_label(current_player)
 	turn_number = 1
 	move_history.clear()
+	_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 	_add_object(Vector2i(-board_radius, 0), OBJECT_CORE, GameDefs.PLAYER_ONE)
 	_add_object(Vector2i(board_radius, 0), OBJECT_CORE, GameDefs.PLAYER_TWO)
@@ -110,6 +125,13 @@ func can_target_action(action_type: String, cell: Vector2i) -> bool:
 	if finished:
 		return false
 
+	if not can_afford_action(current_player, action_type):
+		return false
+
+	return can_target_action_shape(action_type, cell)
+
+
+func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return can_place_node(cell)
@@ -117,6 +139,30 @@ func can_target_action(action_type: String, cell: Vector2i) -> bool:
 			return can_break_node(cell)
 		_:
 			return false
+
+
+func can_afford_action(player: String, action_type: String) -> bool:
+	return int(energy.get(player, 0)) >= action_cost(action_type)
+
+
+func action_cost(action_type: String) -> int:
+	match action_type:
+		GameAction.TYPE_PLACE_NODE:
+			return PLACE_NODE_COST
+		GameAction.TYPE_BREAK_NODE:
+			return BREAK_NODE_COST
+		GameAction.TYPE_SKIP:
+			return SKIP_COST
+		_:
+			return 0
+
+
+func action_energy_requirement_message(action_type: String) -> String:
+	return "%s needs %d Energy to %s" % [
+		GameDefs.player_label(current_player),
+		action_cost(action_type),
+		_action_verb(action_type),
+	]
 
 
 func contains_cell(cell: Vector2i) -> bool:
@@ -153,6 +199,11 @@ func _apply_place_node(action: GameAction) -> Dictionary:
 		status_message = "%s cannot place there" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
+	if not can_afford_action(current_player, action.action_type):
+		status_message = action_energy_requirement_message(action.action_type)
+		return _result(false, status_message, action)
+
+	_spend_energy(current_player, PLACE_NODE_COST)
 	_add_object(action.cell, OBJECT_NODE, current_player)
 	_complete_successful_action(action, "%s placed a node" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
@@ -173,12 +224,18 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 		status_message = "%s needs an active neighbor to break a node" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
+	if not can_afford_action(current_player, action.action_type):
+		status_message = action_energy_requirement_message(action.action_type)
+		return _result(false, status_message, action)
+
+	_spend_energy(current_player, BREAK_NODE_COST)
 	objects.erase(cell_key(action.cell))
 	_complete_successful_action(action, "%s broke an enemy node" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
 
 func _apply_skip(action: GameAction) -> Dictionary:
+	_grant_energy(current_player, SKIP_ENERGY_GAIN)
 	_complete_successful_action(action, "%s skipped" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
@@ -197,6 +254,7 @@ func _record_move(action: GameAction, message: String) -> void:
 		"has_cell": action.has_cell,
 		"cell": action.cell,
 		"message": message,
+		"energy_after": energy[action.player],
 	})
 
 
@@ -210,6 +268,7 @@ func _end_turn(message: String) -> void:
 	else:
 		status_message = message
 		current_player = GameDefs.other_player(current_player)
+		_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 
 func _score_control_point() -> void:
@@ -272,6 +331,26 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 		"owner": owner,
 		"active": type == OBJECT_CORE,
 	}
+
+
+func _spend_energy(player: String, amount: int) -> void:
+	energy[player] = maxi(0, int(energy.get(player, 0)) - amount)
+
+
+func _grant_energy(player: String, amount: int) -> void:
+	energy[player] = mini(MAX_ENERGY, int(energy.get(player, 0)) + amount)
+
+
+func _action_verb(action_type: String) -> String:
+	match action_type:
+		GameAction.TYPE_PLACE_NODE:
+			return "place"
+		GameAction.TYPE_BREAK_NODE:
+			return "break"
+		GameAction.TYPE_SKIP:
+			return "skip"
+		_:
+			return action_type
 
 
 func _parse_action(raw_action: Variant) -> GameAction:

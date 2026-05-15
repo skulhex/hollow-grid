@@ -71,7 +71,11 @@ func _handle_key(event: InputEventKey) -> void:
 
 func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 	if not match_state.can_target_action(selected_action_type, cell):
-		match_state.status_message = "Select a highlighted target for %s" % _action_label(selected_action_type)
+		if match_state.can_target_action_shape(selected_action_type, cell) and not match_state.can_afford_action(match_state.current_player, selected_action_type):
+			match_state.status_message = match_state.action_energy_requirement_message(selected_action_type)
+		else:
+			match_state.status_message = "Select a highlighted target for %s" % _action_label(selected_action_type)
+
 		_refresh()
 		return {
 			"ok": false,

@@ -49,6 +49,10 @@ text = "Player 1"
 layout_mode = 2
 text = "P1 0  |  P2 0"
 
+[node name="EnergyLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+layout_mode = 2
+text = "Energy: P1 2 / P2 1"
+
 [node name="SelectedLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
 text = "Mode: Place Node"
@@ -89,7 +93,7 @@ custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Place Node"
+text = "Place Node (1E)"
 
 [node name="PlaceKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow"]
 custom_minimum_size = Vector2(44, 42)
@@ -107,7 +111,7 @@ custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Break Node"
+text = "Break Node (2E)"
 
 [node name="BreakKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/BreakRow"]
 custom_minimum_size = Vector2(44, 42)
@@ -127,7 +131,7 @@ theme_override_constants/separation = 8
 custom_minimum_size = Vector2(230, 50)
 layout_mode = 2
 focus_mode = 0
-text = "Pass Turn"
+text = "Pass Turn (+1E)"
 
 [node name="SkipKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow"]
 custom_minimum_size = Vector2(44, 50)

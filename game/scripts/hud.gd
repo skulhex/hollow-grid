@@ -10,6 +10,7 @@ signal restart_requested
 @onready var history_panel: PanelContainer = $Root/HistoryPanel
 @onready var turn_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/TurnLabel
 @onready var score_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ScoreLabel
+@onready var energy_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/EnergyLabel
 @onready var selected_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/SelectedLabel
 @onready var command_title: Label = $Root/CommandPanel/CommandMargin/CommandVBox/CommandTitle
 @onready var history_title: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryTitle
@@ -39,6 +40,7 @@ signal restart_requested
 
 func _ready() -> void:
 	_apply_theme()
+	_apply_button_text()
 	place_button.pressed.connect(_on_place_pressed)
 	break_button.pressed.connect(_on_break_pressed)
 	skip_button.pressed.connect(_on_skip_pressed)
@@ -52,6 +54,10 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 	score_label.text = "P1 %d  |  P2 %d" % [
 		match_state.scores[GameDefs.PLAYER_ONE],
 		match_state.scores[GameDefs.PLAYER_TWO],
+	]
+	energy_label.text = "Energy: P1 %d / P2 %d" % [
+		match_state.energy[GameDefs.PLAYER_ONE],
+		match_state.energy[GameDefs.PLAYER_TWO],
 	]
 	selected_label.text = "Mode: %s" % _action_label(selected_action_type)
 	status_label.text = match_state.status_message
@@ -74,12 +80,14 @@ func _apply_theme() -> void:
 
 	turn_label.add_theme_font_size_override("font_size", 20)
 	score_label.add_theme_font_size_override("font_size", 16)
+	energy_label.add_theme_font_size_override("font_size", 15)
 	selected_label.add_theme_font_size_override("font_size", 14)
 	command_title.add_theme_font_size_override("font_size", 13)
 	history_title.add_theme_font_size_override("font_size", 13)
 	status_label.add_theme_font_size_override("font_size", 15)
 
 	score_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
+	energy_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	selected_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	command_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	history_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
@@ -172,6 +180,12 @@ func _key_style() -> StyleBoxFlat:
 	style.corner_radius_bottom_left = 5
 	style.corner_radius_bottom_right = 5
 	return style
+
+
+func _apply_button_text() -> void:
+	place_button.text = "Place Node (%dE)" % MatchState.PLACE_NODE_COST
+	break_button.text = "Break Node (%dE)" % MatchState.BREAK_NODE_COST
+	skip_button.text = "Pass Turn (+%dE)" % MatchState.SKIP_ENERGY_GAIN
 
 
 func _refresh_history(move_history: Array[Dictionary]) -> void:
