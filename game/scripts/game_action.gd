@@ -3,6 +3,7 @@ extends RefCounted
 
 const TYPE_PLACE_NODE := "place_node"
 const TYPE_BREAK_NODE := "break_node"
+const TYPE_RECLAIM_NODE := "reclaim_node"
 const TYPE_SKIP := "skip"
 
 const KEY_TYPE := "type"
@@ -31,6 +32,10 @@ static func place_node(action_player: String, action_cell: Vector2i) -> GameActi
 
 static func break_node(action_player: String, action_cell: Vector2i) -> GameAction:
 	return GameAction.new(TYPE_BREAK_NODE, action_player, action_cell, true)
+
+
+static func reclaim_node(action_player: String, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_RECLAIM_NODE, action_player, action_cell, true)
 
 
 static func skip(action_player: String) -> GameAction:
@@ -81,7 +86,7 @@ func is_valid_shape() -> bool:
 	if action_type == TYPE_SKIP:
 		return not has_cell
 
-	return action_type in [TYPE_PLACE_NODE, TYPE_BREAK_NODE] and has_cell
+	return action_type in [TYPE_PLACE_NODE, TYPE_BREAK_NODE, TYPE_RECLAIM_NODE] and has_cell
 
 
 static func _parse_cell(raw_cell: Variant) -> Vector2i:

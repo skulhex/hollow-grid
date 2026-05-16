@@ -63,6 +63,8 @@ func _handle_key(event: InputEventKey) -> void:
 			_select_action(GameAction.TYPE_PLACE_NODE)
 		KEY_2:
 			_select_action(GameAction.TYPE_BREAK_NODE)
+		KEY_3:
+			_select_action(GameAction.TYPE_RECLAIM_NODE)
 		KEY_SPACE:
 			_skip_turn()
 		KEY_R:
@@ -87,6 +89,8 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 			return _submit_action(GameAction.place_node(match_state.current_player, cell))
 		GameAction.TYPE_BREAK_NODE:
 			return _submit_action(GameAction.break_node(match_state.current_player, cell))
+		GameAction.TYPE_RECLAIM_NODE:
+			return _submit_action(GameAction.reclaim_node(match_state.current_player, cell))
 		_:
 			return {
 				"ok": false,
@@ -101,7 +105,7 @@ func _submit_action(action: GameAction) -> Dictionary:
 
 
 func _select_action(action_type: String) -> void:
-	if action_type != GameAction.TYPE_PLACE_NODE and action_type != GameAction.TYPE_BREAK_NODE:
+	if action_type != GameAction.TYPE_PLACE_NODE and action_type != GameAction.TYPE_BREAK_NODE and action_type != GameAction.TYPE_RECLAIM_NODE:
 		return
 
 	selected_action_type = action_type
@@ -145,5 +149,7 @@ func _action_label(action_type: String) -> String:
 			return "Place"
 		GameAction.TYPE_BREAK_NODE:
 			return "Break"
+		GameAction.TYPE_RECLAIM_NODE:
+			return "Reclaim"
 		_:
 			return action_type

@@ -169,6 +169,9 @@ func _target_color() -> Color:
 	if selected_action_type == GameAction.TYPE_BREAK_NODE:
 		return Color(1.0, 0.62, 0.22)
 
+	if selected_action_type == GameAction.TYPE_RECLAIM_NODE:
+		return Color(0.48, 0.78, 0.38)
+
 	return GameDefs.player_color(match_state.current_player)
 
 
