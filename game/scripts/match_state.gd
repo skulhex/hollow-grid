@@ -31,6 +31,10 @@ var resources: Dictionary = {
 	GameDefs.PLAYER_ONE: START_RESOURCE,
 	GameDefs.PLAYER_TWO: START_RESOURCE,
 }
+var acted_this_round: Dictionary = {
+	GameDefs.PLAYER_ONE: false,
+	GameDefs.PLAYER_TWO: false,
+}
 var current_player := GameDefs.PLAYER_ONE
 var finished := false
 var status_message := "Player 1: place a node"
@@ -52,6 +56,7 @@ func setup_match() -> void:
 	core_hp[GameDefs.PLAYER_TWO] = START_CORE_HP
 	resources[GameDefs.PLAYER_ONE] = START_RESOURCE
 	resources[GameDefs.PLAYER_TWO] = START_RESOURCE
+	_reset_round_actions()
 	current_player = GameDefs.PLAYER_ONE
 	finished = false
 	status_message = "%s: place a node" % GameDefs.player_label(current_player)
@@ -312,7 +317,8 @@ func _apply_skip(action: GameAction) -> Dictionary:
 
 func _complete_successful_action(action: GameAction, message: String) -> void:
 	_record_move(action, message)
-	_end_turn(action, message)
+	acted_this_round[action.player] = true
+	_end_turn(message)
 	turn_number += 1
 
 
@@ -329,15 +335,16 @@ func _record_move(action: GameAction, message: String) -> void:
 	})
 
 
-func _end_turn(action: GameAction, message: String) -> void:
+func _end_turn(message: String) -> void:
 	_update_active_nodes()
 	var final_message := message
 
-	if action.player == GameDefs.PLAYER_TWO:
-		var resource_result := _resource_round()
-		_annotate_last_move(resource_result)
-		final_message = "%s. %s" % [message, _resource_result_message(resource_result)]
+	if _round_ready_to_resolve():
+		var resolve_result := _resolve_round()
+		_annotate_last_move(resolve_result)
+		final_message = "%s. %s" % [message, _resolve_result_message(resolve_result)]
 		round_number += 1
+		_reset_round_actions()
 
 	var winner := _winner()
 	if not winner.is_empty():
@@ -349,7 +356,18 @@ func _end_turn(action: GameAction, message: String) -> void:
 		_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 
-func _resource_round() -> Dictionary:
+func _round_ready_to_resolve() -> bool:
+	return bool(acted_this_round[GameDefs.PLAYER_ONE]) and bool(acted_this_round[GameDefs.PLAYER_TWO])
+
+
+func _reset_round_actions() -> void:
+	acted_this_round[GameDefs.PLAYER_ONE] = false
+	acted_this_round[GameDefs.PLAYER_TWO] = false
+
+
+func _resolve_round() -> Dictionary:
+	_update_active_nodes()
+
 	var owner := control_point_owner(CONTROL_POINT)
 	var resource_awarded := 0
 
@@ -361,29 +379,31 @@ func _resource_round() -> Dictionary:
 		"round": round_number,
 		"resource_player": owner,
 		"resource_awarded": resource_awarded,
+		"winner": _winner(),
 	}
 
 
-func _resource_result_message(resource_result: Dictionary) -> String:
-	var resource_player: String = resource_result.get("resource_player", "")
+func _resolve_result_message(resolve_result: Dictionary) -> String:
+	var resource_player: String = resolve_result.get("resource_player", "")
 
 	if resource_player.is_empty():
 		return "Round contested: no resource"
 
 	return "Round resource: %s +%dR" % [
 		GameDefs.player_label(resource_player),
-		int(resource_result.get("resource_awarded", 0)),
+		int(resolve_result.get("resource_awarded", 0)),
 	]
 
 
-func _annotate_last_move(resource_result: Dictionary) -> void:
+func _annotate_last_move(resolve_result: Dictionary) -> void:
 	if move_history.is_empty():
 		return
 
 	var last_index := move_history.size() - 1
-	move_history[last_index]["round"] = resource_result["round"]
-	move_history[last_index]["resource_player"] = resource_result["resource_player"]
-	move_history[last_index]["resource_awarded"] = resource_result["resource_awarded"]
+	move_history[last_index]["round"] = resolve_result["round"]
+	move_history[last_index]["resource_player"] = resolve_result["resource_player"]
+	move_history[last_index]["resource_awarded"] = resolve_result["resource_awarded"]
+	move_history[last_index]["winner"] = resolve_result["winner"]
 
 
 func _winner() -> String:
