@@ -8,21 +8,28 @@ const CONTROL_POINT := Vector2i(0, 0)
 
 const MAX_ENERGY := 3
 const START_ENERGY := 1
+const START_CORE_HP := 5
+const START_RESOURCE := 0
 const TURN_ENERGY_GAIN := 1
 const SKIP_ENERGY_GAIN := 1
+const CONTROL_POINT_RESOURCE_GAIN := 1
 const PLACE_NODE_COST := 1
 const BREAK_NODE_COST := 2
 const SKIP_COST := 0
 
 var board_radius: int
 var objects: Dictionary = {}
-var scores: Dictionary = {
-	GameDefs.PLAYER_ONE: 0,
-	GameDefs.PLAYER_TWO: 0,
-}
 var energy: Dictionary = {
 	GameDefs.PLAYER_ONE: START_ENERGY,
 	GameDefs.PLAYER_TWO: START_ENERGY,
+}
+var core_hp: Dictionary = {
+	GameDefs.PLAYER_ONE: START_CORE_HP,
+	GameDefs.PLAYER_TWO: START_CORE_HP,
+}
+var resources: Dictionary = {
+	GameDefs.PLAYER_ONE: START_RESOURCE,
+	GameDefs.PLAYER_TWO: START_RESOURCE,
 }
 var current_player := GameDefs.PLAYER_ONE
 var finished := false
@@ -39,10 +46,12 @@ func _init(start_board_radius: int = 3) -> void:
 
 func setup_match() -> void:
 	objects.clear()
-	scores[GameDefs.PLAYER_ONE] = 0
-	scores[GameDefs.PLAYER_TWO] = 0
 	energy[GameDefs.PLAYER_ONE] = START_ENERGY
 	energy[GameDefs.PLAYER_TWO] = START_ENERGY
+	core_hp[GameDefs.PLAYER_ONE] = START_CORE_HP
+	core_hp[GameDefs.PLAYER_TWO] = START_CORE_HP
+	resources[GameDefs.PLAYER_ONE] = START_RESOURCE
+	resources[GameDefs.PLAYER_TWO] = START_RESOURCE
 	current_player = GameDefs.PLAYER_ONE
 	finished = false
 	status_message = "%s: place a node" % GameDefs.player_label(current_player)
@@ -325,9 +334,9 @@ func _end_turn(action: GameAction, message: String) -> void:
 	var final_message := message
 
 	if action.player == GameDefs.PLAYER_TWO:
-		var score_result := _score_round()
-		_annotate_last_move(score_result)
-		final_message = "%s. %s" % [message, _score_result_message(score_result)]
+		var resource_result := _resource_round()
+		_annotate_last_move(resource_result)
+		final_message = "%s. %s" % [message, _resource_result_message(resource_result)]
 		round_number += 1
 
 	var winner := _winner()
@@ -340,49 +349,49 @@ func _end_turn(action: GameAction, message: String) -> void:
 		_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 
-func _score_round() -> Dictionary:
+func _resource_round() -> Dictionary:
 	var owner := control_point_owner(CONTROL_POINT)
-	var score_awarded := 0
+	var resource_awarded := 0
 
 	if not owner.is_empty():
-		scores[owner] += 1
-		score_awarded = 1
+		resources[owner] += CONTROL_POINT_RESOURCE_GAIN
+		resource_awarded = CONTROL_POINT_RESOURCE_GAIN
 
 	return {
 		"round": round_number,
-		"scored_player": owner,
-		"score_awarded": score_awarded,
+		"resource_player": owner,
+		"resource_awarded": resource_awarded,
 	}
 
 
-func _score_result_message(score_result: Dictionary) -> String:
-	var scored_player: String = score_result.get("scored_player", "")
+func _resource_result_message(resource_result: Dictionary) -> String:
+	var resource_player: String = resource_result.get("resource_player", "")
 
-	if scored_player.is_empty():
-		return "Round tied: no score"
+	if resource_player.is_empty():
+		return "Round contested: no resource"
 
-	return "Round scored: %s +%d" % [
-		GameDefs.player_label(scored_player),
-		int(score_result.get("score_awarded", 0)),
+	return "Round resource: %s +%dR" % [
+		GameDefs.player_label(resource_player),
+		int(resource_result.get("resource_awarded", 0)),
 	]
 
 
-func _annotate_last_move(score_result: Dictionary) -> void:
+func _annotate_last_move(resource_result: Dictionary) -> void:
 	if move_history.is_empty():
 		return
 
 	var last_index := move_history.size() - 1
-	move_history[last_index]["round"] = score_result["round"]
-	move_history[last_index]["scored_player"] = score_result["scored_player"]
-	move_history[last_index]["score_awarded"] = score_result["score_awarded"]
+	move_history[last_index]["round"] = resource_result["round"]
+	move_history[last_index]["resource_player"] = resource_result["resource_player"]
+	move_history[last_index]["resource_awarded"] = resource_result["resource_awarded"]
 
 
 func _winner() -> String:
-	if scores[GameDefs.PLAYER_ONE] >= 5:
-		return GameDefs.PLAYER_ONE
-
-	if scores[GameDefs.PLAYER_TWO] >= 5:
+	if int(core_hp[GameDefs.PLAYER_ONE]) <= 0:
 		return GameDefs.PLAYER_TWO
+
+	if int(core_hp[GameDefs.PLAYER_TWO]) <= 0:
+		return GameDefs.PLAYER_ONE
 
 	return ""
 

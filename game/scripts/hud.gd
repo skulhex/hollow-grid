@@ -51,9 +51,11 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 	turn_label.text = GameDefs.player_label(match_state.current_player)
 	turn_label.add_theme_color_override("font_color", GameDefs.player_color(match_state.current_player))
 
-	score_label.text = "P1 %d  |  P2 %d" % [
-		match_state.scores[GameDefs.PLAYER_ONE],
-		match_state.scores[GameDefs.PLAYER_TWO],
+	score_label.text = "Core HP: P1 %d / P2 %d  |  Resource: P1 %d / P2 %d" % [
+		match_state.core_hp[GameDefs.PLAYER_ONE],
+		match_state.core_hp[GameDefs.PLAYER_TWO],
+		match_state.resources[GameDefs.PLAYER_ONE],
+		match_state.resources[GameDefs.PLAYER_TWO],
 	]
 	energy_label.text = "Energy: P1 %d / P2 %d" % [
 		match_state.energy[GameDefs.PLAYER_ONE],
