@@ -27,7 +27,7 @@ layout_mode = 1
 offset_left = 18.0
 offset_top = 18.0
 offset_right = 322.0
-offset_bottom = 128.0
+offset_bottom = 154.0
 mouse_filter = 2
 
 [node name="StatusMargin" type="MarginContainer" parent="HUD/Root/StatusPanel"]
@@ -45,13 +45,17 @@ theme_override_constants/separation = 5
 layout_mode = 2
 text = "Player 1"
 
-[node name="ScoreLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="CoreHpLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
-text = "P1 0  |  P2 0"
+text = "Core HP: P1 5 / P2 5"
 
 [node name="EnergyLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
 text = "Energy: P1 2 / P2 1"
+
+[node name="ResourceLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+layout_mode = 2
+text = "Resource: P1 0 / P2 0"
 
 [node name="SelectedLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2

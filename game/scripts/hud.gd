@@ -9,8 +9,9 @@ signal restart_requested
 @onready var command_panel: PanelContainer = $Root/CommandPanel
 @onready var history_panel: PanelContainer = $Root/HistoryPanel
 @onready var turn_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/TurnLabel
-@onready var score_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ScoreLabel
+@onready var core_hp_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/CoreHpLabel
 @onready var energy_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/EnergyLabel
+@onready var resource_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ResourceLabel
 @onready var selected_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/SelectedLabel
 @onready var command_title: Label = $Root/CommandPanel/CommandMargin/CommandVBox/CommandTitle
 @onready var history_title: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryTitle
@@ -51,15 +52,17 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 	turn_label.text = GameDefs.player_label(match_state.current_player)
 	turn_label.add_theme_color_override("font_color", GameDefs.player_color(match_state.current_player))
 
-	score_label.text = "Core HP: P1 %d / P2 %d  |  Resource: P1 %d / P2 %d" % [
+	core_hp_label.text = "Core HP: P1 %d / P2 %d" % [
 		match_state.core_hp[GameDefs.PLAYER_ONE],
 		match_state.core_hp[GameDefs.PLAYER_TWO],
-		match_state.resources[GameDefs.PLAYER_ONE],
-		match_state.resources[GameDefs.PLAYER_TWO],
 	]
 	energy_label.text = "Energy: P1 %d / P2 %d" % [
 		match_state.energy[GameDefs.PLAYER_ONE],
 		match_state.energy[GameDefs.PLAYER_TWO],
+	]
+	resource_label.text = "Resource: P1 %d / P2 %d" % [
+		match_state.resources[GameDefs.PLAYER_ONE],
+		match_state.resources[GameDefs.PLAYER_TWO],
 	]
 	selected_label.text = "Mode: %s" % _action_label(selected_action_type)
 	status_label.text = match_state.status_message
@@ -81,15 +84,17 @@ func _apply_theme() -> void:
 	history_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.86)))
 
 	turn_label.add_theme_font_size_override("font_size", 20)
-	score_label.add_theme_font_size_override("font_size", 16)
+	core_hp_label.add_theme_font_size_override("font_size", 16)
 	energy_label.add_theme_font_size_override("font_size", 15)
+	resource_label.add_theme_font_size_override("font_size", 15)
 	selected_label.add_theme_font_size_override("font_size", 14)
 	command_title.add_theme_font_size_override("font_size", 13)
 	history_title.add_theme_font_size_override("font_size", 13)
 	status_label.add_theme_font_size_override("font_size", 15)
 
-	score_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
+	core_hp_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	energy_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
+	resource_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	selected_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	command_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	history_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
