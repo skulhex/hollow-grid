@@ -64,7 +64,7 @@ func _handle_key(event: InputEventKey) -> void:
 		KEY_2:
 			_select_action(GameAction.TYPE_BREAK_NODE)
 		KEY_3:
-			_select_action(GameAction.TYPE_RECLAIM_NODE)
+			_select_action(GameAction.TYPE_CLEAR_NODE)
 		KEY_SPACE:
 			_skip_turn()
 		KEY_R:
@@ -73,8 +73,9 @@ func _handle_key(event: InputEventKey) -> void:
 
 func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 	if not match_state.can_target_action(selected_action_type, cell):
-		if match_state.can_target_action_shape(selected_action_type, cell) and not match_state.can_afford_action(match_state.current_player, selected_action_type):
-			match_state.status_message = match_state.action_energy_requirement_message(selected_action_type)
+		if match_state.can_target_action_shape(selected_action_type, cell) and not match_state.can_afford_target_action(match_state.current_player, selected_action_type, cell):
+			var required_cost := match_state.action_target_cost(match_state.current_player, selected_action_type, cell)
+			match_state.status_message = match_state.action_energy_requirement_message(selected_action_type, required_cost)
 		else:
 			match_state.status_message = "Select a highlighted target for %s" % _action_label(selected_action_type)
 
@@ -89,8 +90,8 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 			return _submit_action(GameAction.place_node(match_state.current_player, cell))
 		GameAction.TYPE_BREAK_NODE:
 			return _submit_action(GameAction.break_node(match_state.current_player, cell))
-		GameAction.TYPE_RECLAIM_NODE:
-			return _submit_action(GameAction.reclaim_node(match_state.current_player, cell))
+		GameAction.TYPE_CLEAR_NODE:
+			return _submit_action(GameAction.clear_node(match_state.current_player, cell))
 		_:
 			return {
 				"ok": false,
@@ -105,7 +106,7 @@ func _submit_action(action: GameAction) -> Dictionary:
 
 
 func _select_action(action_type: String) -> void:
-	if action_type != GameAction.TYPE_PLACE_NODE and action_type != GameAction.TYPE_BREAK_NODE and action_type != GameAction.TYPE_RECLAIM_NODE:
+	if action_type != GameAction.TYPE_PLACE_NODE and action_type != GameAction.TYPE_BREAK_NODE and action_type != GameAction.TYPE_CLEAR_NODE:
 		return
 
 	selected_action_type = action_type
@@ -149,7 +150,7 @@ func _action_label(action_type: String) -> String:
 			return "Place"
 		GameAction.TYPE_BREAK_NODE:
 			return "Break"
-		GameAction.TYPE_RECLAIM_NODE:
-			return "Reclaim"
+		GameAction.TYPE_CLEAR_NODE:
+			return "Clear"
 		_:
 			return action_type

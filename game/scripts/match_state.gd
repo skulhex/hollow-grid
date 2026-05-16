@@ -16,7 +16,8 @@ const CONTROL_POINT_RESOURCE_GAIN := 1
 const CORE_DAMAGE_PER_RESOLVE := 1
 const PLACE_NODE_COST := 1
 const BREAK_NODE_COST := 2
-const RECLAIM_NODE_COST := 0
+const CLEAR_OWN_NODE_COST := 0
+const CLEAR_ENEMY_NODE_COST := 1
 const SKIP_COST := 0
 
 var board_radius: int
@@ -94,8 +95,8 @@ func apply_action(raw_action: Variant) -> Dictionary:
 			return _apply_place_node(action)
 		GameAction.TYPE_BREAK_NODE:
 			return _apply_break_node(action)
-		GameAction.TYPE_RECLAIM_NODE:
-			return _apply_reclaim_node(action)
+		GameAction.TYPE_CLEAR_NODE:
+			return _apply_clear_node(action)
 		GameAction.TYPE_SKIP:
 			return _apply_skip(action)
 		_:
@@ -111,8 +112,8 @@ func break_node(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.break_node(current_player, cell))
 
 
-func reclaim_node(cell: Vector2i) -> Dictionary:
-	return apply_action(GameAction.reclaim_node(current_player, cell))
+func clear_node(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.clear_node(current_player, cell))
 
 
 func skip_turn() -> Dictionary:
@@ -153,7 +154,7 @@ func can_break_node(cell: Vector2i) -> bool:
 	return has_active_neighbor(current_player, cell)
 
 
-func can_reclaim_node(cell: Vector2i) -> bool:
+func can_clear_node(cell: Vector2i) -> bool:
 	if not contains_cell(cell):
 		return false
 
@@ -165,20 +166,23 @@ func can_reclaim_node(cell: Vector2i) -> bool:
 	if object.get("type") != OBJECT_NODE:
 		return false
 
-	if object.get("owner") != current_player:
+	if not object.get("disabled", false):
 		return false
 
-	return object.get("disabled", false)
+	if object.get("owner") == current_player:
+		return true
+
+	return has_active_neighbor(current_player, cell)
 
 
 func can_target_action(action_type: String, cell: Vector2i) -> bool:
 	if finished:
 		return false
 
-	if not can_afford_action(current_player, action_type):
+	if not can_target_action_shape(action_type, cell):
 		return false
 
-	return can_target_action_shape(action_type, cell)
+	return can_afford_target_action(current_player, action_type, cell)
 
 
 func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
@@ -187,8 +191,8 @@ func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 			return can_place_node(cell)
 		GameAction.TYPE_BREAK_NODE:
 			return can_break_node(cell)
-		GameAction.TYPE_RECLAIM_NODE:
-			return can_reclaim_node(cell)
+		GameAction.TYPE_CLEAR_NODE:
+			return can_clear_node(cell)
 		_:
 			return false
 
@@ -197,24 +201,49 @@ func can_afford_action(player: String, action_type: String) -> bool:
 	return int(energy.get(player, 0)) >= action_cost(action_type)
 
 
+func can_afford_target_action(player: String, action_type: String, cell: Vector2i) -> bool:
+	return int(energy.get(player, 0)) >= action_target_cost(player, action_type, cell)
+
+
 func action_cost(action_type: String) -> int:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return PLACE_NODE_COST
 		GameAction.TYPE_BREAK_NODE:
 			return BREAK_NODE_COST
-		GameAction.TYPE_RECLAIM_NODE:
-			return RECLAIM_NODE_COST
+		GameAction.TYPE_CLEAR_NODE:
+			return CLEAR_OWN_NODE_COST
 		GameAction.TYPE_SKIP:
 			return SKIP_COST
 		_:
 			return 0
 
 
-func action_energy_requirement_message(action_type: String) -> String:
+func action_target_cost(player: String, action_type: String, cell: Vector2i) -> int:
+	if action_type == GameAction.TYPE_CLEAR_NODE:
+		return clear_node_cost(player, cell)
+
+	return action_cost(action_type)
+
+
+func clear_node_cost(player: String, cell: Vector2i) -> int:
+	var object := get_object(cell)
+
+	if object.is_empty() or object.get("owner") == player:
+		return CLEAR_OWN_NODE_COST
+
+	return CLEAR_ENEMY_NODE_COST
+
+
+func action_energy_requirement_message(action_type: String, required_cost: int = -1) -> String:
+	var cost := required_cost
+
+	if cost < 0:
+		cost = action_cost(action_type)
+
 	return "%s needs %d Energy to %s" % [
 		GameDefs.player_label(current_player),
-		action_cost(action_type),
+		cost,
 		_action_verb(action_type),
 	]
 
@@ -381,18 +410,27 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 	return _result(true, status_message, action)
 
 
-func _apply_reclaim_node(action: GameAction) -> Dictionary:
-	if not can_reclaim_node(action.cell):
-		status_message = "%s cannot reclaim that cell" % GameDefs.player_label(current_player)
+func _apply_clear_node(action: GameAction) -> Dictionary:
+	if not can_clear_node(action.cell):
+		status_message = "%s cannot clear that cell" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
-	if not can_afford_action(current_player, action.action_type):
-		status_message = action_energy_requirement_message(action.action_type)
+	var clear_cost := clear_node_cost(current_player, action.cell)
+
+	if not can_afford_target_action(current_player, action.action_type, action.cell):
+		status_message = action_energy_requirement_message(action.action_type, clear_cost)
 		return _result(false, status_message, action)
 
-	_spend_energy(current_player, RECLAIM_NODE_COST)
+	var object_owner: String = get_object(action.cell).get("owner", "")
 	objects.erase(cell_key(action.cell))
-	_complete_successful_action(action, "%s reclaimed a disabled node" % GameDefs.player_label(current_player))
+	_spend_energy(current_player, clear_cost)
+
+	var clear_message := "%s cleared an enemy disabled node" % GameDefs.player_label(current_player)
+
+	if object_owner == current_player:
+		clear_message = "%s cleared a friendly disabled node" % GameDefs.player_label(current_player)
+
+	_complete_successful_action(action, clear_message)
 	return _result(true, status_message, action)
 
 
@@ -692,8 +730,8 @@ func _action_verb(action_type: String) -> String:
 			return "place"
 		GameAction.TYPE_BREAK_NODE:
 			return "break"
-		GameAction.TYPE_RECLAIM_NODE:
-			return "reclaim"
+		GameAction.TYPE_CLEAR_NODE:
+			return "clear"
 		GameAction.TYPE_SKIP:
 			return "skip"
 		_:

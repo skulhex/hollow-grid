@@ -128,18 +128,18 @@ text = "2"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ReclaimRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="ClearRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ReclaimButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ReclaimRow"]
+[node name="ClearButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ClearRow"]
 custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Reclaim Node (0E)"
+text = "Clear Node (0/1E)"
 
-[node name="ReclaimKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ReclaimRow"]
+[node name="ClearKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ClearRow"]
 custom_minimum_size = Vector2(44, 42)
 layout_mode = 2
 text = "3"

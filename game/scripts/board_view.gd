@@ -134,17 +134,14 @@ func _draw_objects(resolve_preview: Dictionary) -> void:
 				draw_arc(center, 35.0, deg_to_rad(145.0), deg_to_rad(395.0), 48, warning_color.darkened(0.12), 2.0, true)
 		else:
 			if is_disabled:
-				color = Color(0.22, 0.235, 0.255)
+				color = _disabled_owner_fill(color)
 			elif not object.get("active", false):
 				color = color.darkened(0.52)
 
 			draw_circle(center, 18.0, color)
 
 			if is_disabled:
-				var disabled_outline := Color(0.58, 0.62, 0.68)
-				draw_arc(center, 18.0, 0.0, TAU, 48, disabled_outline, 2.5, true)
-				draw_line(center + Vector2(-8.0, -8.0), center + Vector2(8.0, 8.0), disabled_outline, 3.0, true)
-				draw_line(center + Vector2(8.0, -8.0), center + Vector2(-8.0, 8.0), disabled_outline, 3.0, true)
+				_draw_disabled_overlay(center, GameDefs.player_color(object_owner))
 			else:
 				draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
 
@@ -178,7 +175,7 @@ func _target_color() -> Color:
 	if selected_action_type == GameAction.TYPE_BREAK_NODE:
 		return Color(1.0, 0.62, 0.22)
 
-	if selected_action_type == GameAction.TYPE_RECLAIM_NODE:
+	if selected_action_type == GameAction.TYPE_CLEAR_NODE:
 		return Color(0.48, 0.78, 0.38)
 
 	return GameDefs.player_color(match_state.current_player)
@@ -191,6 +188,23 @@ func _control_point_color(cell: Vector2i) -> Color:
 		return Color(0.95, 0.78, 0.28)
 
 	return GameDefs.player_color(control_owner)
+
+
+func _disabled_owner_fill(owner_color: Color) -> Color:
+	return owner_color.darkened(0.42).lerp(Color(0.13, 0.145, 0.165), 0.24)
+
+
+func _draw_disabled_overlay(center: Vector2, owner_color: Color) -> void:
+	var owner_outline := owner_color.lightened(0.16)
+	var disabled_shadow := Color(0.05, 0.06, 0.075, 0.58)
+	var disabled_mark := Color(0.9, 0.93, 0.96, 0.78)
+	var cross_size := 7.0
+
+	draw_arc(center, 19.0, 0.0, TAU, 48, owner_outline, 2.4, true)
+	draw_line(center + Vector2(-cross_size, -cross_size), center + Vector2(cross_size, cross_size), disabled_shadow, 4.2, true)
+	draw_line(center + Vector2(cross_size, -cross_size), center + Vector2(-cross_size, cross_size), disabled_shadow, 4.2, true)
+	draw_line(center + Vector2(-cross_size, -cross_size), center + Vector2(cross_size, cross_size), disabled_mark, 2.4, true)
+	draw_line(center + Vector2(cross_size, -cross_size), center + Vector2(-cross_size, cross_size), disabled_mark, 2.4, true)
 
 
 func _is_threatened_core(owner_player: String, resolve_preview: Dictionary) -> bool:

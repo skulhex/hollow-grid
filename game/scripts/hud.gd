@@ -18,7 +18,7 @@ signal restart_requested
 @onready var history_title: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryTitle
 @onready var place_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceButton
 @onready var break_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakButton
-@onready var reclaim_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/ReclaimRow/ReclaimButton
+@onready var clear_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/ClearRow/ClearButton
 @onready var skip_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipButton
 @onready var restart_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow/RestartButton
 @onready var status_label: Label = $Root/CommandPanel/CommandMargin/CommandVBox/StatusLabel
@@ -36,7 +36,7 @@ signal restart_requested
 @onready var key_labels: Array[Label] = [
 	$Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakKeyLabel,
-	$Root/CommandPanel/CommandMargin/CommandVBox/ReclaimRow/ReclaimKeyLabel,
+	$Root/CommandPanel/CommandMargin/CommandVBox/ClearRow/ClearKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow/RestartKeyLabel,
 ]
@@ -47,7 +47,7 @@ func _ready() -> void:
 	_apply_button_text()
 	place_button.pressed.connect(_on_place_pressed)
 	break_button.pressed.connect(_on_break_pressed)
-	reclaim_button.pressed.connect(_on_reclaim_pressed)
+	clear_button.pressed.connect(_on_clear_pressed)
 	skip_button.pressed.connect(_on_skip_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 
@@ -74,7 +74,7 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
 	break_button.button_pressed = selected_action_type == GameAction.TYPE_BREAK_NODE
-	reclaim_button.button_pressed = selected_action_type == GameAction.TYPE_RECLAIM_NODE
+	clear_button.button_pressed = selected_action_type == GameAction.TYPE_CLEAR_NODE
 
 	if match_state.finished:
 		status_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.28))
@@ -115,7 +115,7 @@ func _apply_theme() -> void:
 
 	_style_action_button(place_button, Color(0.22, 0.58, 1.0))
 	_style_action_button(break_button, Color(1.0, 0.62, 0.22))
-	_style_action_button(reclaim_button, Color(0.48, 0.78, 0.38))
+	_style_action_button(clear_button, Color(0.48, 0.78, 0.38))
 	_style_skip_button(skip_button)
 	_style_utility_button(restart_button)
 
@@ -201,7 +201,10 @@ func _key_style() -> StyleBoxFlat:
 func _apply_button_text() -> void:
 	place_button.text = "Place Node (%dE)" % MatchState.PLACE_NODE_COST
 	break_button.text = "Break Node (%dE)" % MatchState.BREAK_NODE_COST
-	reclaim_button.text = "Reclaim Node (%dE)" % MatchState.RECLAIM_NODE_COST
+	clear_button.text = "Clear Node (%d/%dE)" % [
+		MatchState.CLEAR_OWN_NODE_COST,
+		MatchState.CLEAR_ENEMY_NODE_COST,
+	]
 	skip_button.text = "Pass Turn (+%dE)" % MatchState.SKIP_ENERGY_GAIN
 
 
@@ -241,8 +244,8 @@ func _short_action_label(action_type: String) -> String:
 			return "Place"
 		GameAction.TYPE_BREAK_NODE:
 			return "Break"
-		GameAction.TYPE_RECLAIM_NODE:
-			return "Reclaim"
+		GameAction.TYPE_CLEAR_NODE:
+			return "Clear"
 		GameAction.TYPE_SKIP:
 			return "Skip"
 		_:
@@ -267,8 +270,8 @@ func _on_break_pressed() -> void:
 	action_selected.emit(GameAction.TYPE_BREAK_NODE)
 
 
-func _on_reclaim_pressed() -> void:
-	action_selected.emit(GameAction.TYPE_RECLAIM_NODE)
+func _on_clear_pressed() -> void:
+	action_selected.emit(GameAction.TYPE_CLEAR_NODE)
 
 
 func _on_skip_pressed() -> void:
@@ -285,7 +288,7 @@ func _action_label(action_type: String) -> String:
 			return "Place Node"
 		GameAction.TYPE_BREAK_NODE:
 			return "Break Node"
-		GameAction.TYPE_RECLAIM_NODE:
-			return "Reclaim Node"
+		GameAction.TYPE_CLEAR_NODE:
+			return "Clear Node"
 		_:
 			return action_type
