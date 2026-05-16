@@ -13,6 +13,7 @@ const START_RESOURCE := 0
 const TURN_ENERGY_GAIN := 1
 const SKIP_ENERGY_GAIN := 1
 const CONTROL_POINT_RESOURCE_GAIN := 1
+const CORE_DAMAGE_PER_RESOLVE := 1
 const PLACE_NODE_COST := 1
 const BREAK_NODE_COST := 2
 const SKIP_COST := 0
@@ -346,14 +347,18 @@ func _end_turn(message: String) -> void:
 		round_number += 1
 		_reset_round_actions()
 
-	var winner := _winner()
-	if not winner.is_empty():
+	if _is_draw():
 		finished = true
-		status_message = "%s. %s wins" % [final_message, GameDefs.player_label(winner)]
+		status_message = "%s. Draw: both Cores destroyed" % final_message
 	else:
-		status_message = final_message
-		current_player = GameDefs.other_player(current_player)
-		_grant_energy(current_player, TURN_ENERGY_GAIN)
+		var winner := _winner()
+		if not winner.is_empty():
+			finished = true
+			status_message = "%s. %s wins" % [final_message, GameDefs.player_label(winner)]
+		else:
+			status_message = final_message
+			current_player = GameDefs.other_player(current_player)
+			_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 
 func _round_ready_to_resolve() -> bool:
@@ -375,24 +380,99 @@ func _resolve_round() -> Dictionary:
 		resources[owner] += CONTROL_POINT_RESOURCE_GAIN
 		resource_awarded = CONTROL_POINT_RESOURCE_GAIN
 
+	var core_damage := _apply_core_damage()
+
 	return {
 		"round": round_number,
 		"resource_player": owner,
 		"resource_awarded": resource_awarded,
+		"core_damage": core_damage,
 		"winner": _winner(),
+		"draw": _is_draw(),
 	}
 
 
+func _apply_core_damage() -> Dictionary:
+	var damage := {
+		GameDefs.PLAYER_ONE: 0,
+		GameDefs.PLAYER_TWO: 0,
+	}
+
+	if _player_threatens_core(GameDefs.PLAYER_TWO, GameDefs.PLAYER_ONE):
+		damage[GameDefs.PLAYER_ONE] = CORE_DAMAGE_PER_RESOLVE
+
+	if _player_threatens_core(GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO):
+		damage[GameDefs.PLAYER_TWO] = CORE_DAMAGE_PER_RESOLVE
+
+	for player in damage.keys():
+		var damage_amount: int = damage[player]
+
+		if damage_amount <= 0:
+			continue
+
+		core_hp[player] = maxi(0, int(core_hp[player]) - damage_amount)
+
+	return damage
+
+
+func _player_threatens_core(attacker: String, defender: String) -> bool:
+	var defender_core_cell := _core_cell(defender)
+
+	if not contains_cell(defender_core_cell):
+		return false
+
+	for direction in HexGrid.DIRECTIONS:
+		var object := get_object(defender_core_cell + direction)
+
+		if object.is_empty():
+			continue
+
+		if object.get("owner") != attacker:
+			continue
+
+		if object.get("type") != OBJECT_NODE:
+			continue
+
+		if object.get("disabled", false):
+			continue
+
+		if object.get("active", false):
+			return true
+
+	return false
+
+
+func _core_cell(owner: String) -> Vector2i:
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") == OBJECT_CORE and object.get("owner") == owner:
+			return object["cell"]
+
+	return Vector2i(999, 999)
+
+
 func _resolve_result_message(resolve_result: Dictionary) -> String:
+	var messages: Array[String] = []
 	var resource_player: String = resolve_result.get("resource_player", "")
 
 	if resource_player.is_empty():
-		return "Round contested: no resource"
+		messages.append("Round contested: no resource")
+	else:
+		messages.append("Round resource: %s +%dR" % [
+			GameDefs.player_label(resource_player),
+			int(resolve_result.get("resource_awarded", 0)),
+		])
 
-	return "Round resource: %s +%dR" % [
-		GameDefs.player_label(resource_player),
-		int(resolve_result.get("resource_awarded", 0)),
-	]
+	var core_damage: Dictionary = resolve_result.get("core_damage", {})
+
+	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		var damage_amount := int(core_damage.get(player, 0))
+
+		if damage_amount > 0:
+			messages.append("%s Core -%dHP" % [GameDefs.player_label(player), damage_amount])
+
+	return ". ".join(messages)
 
 
 func _annotate_last_move(resolve_result: Dictionary) -> void:
@@ -403,10 +483,19 @@ func _annotate_last_move(resolve_result: Dictionary) -> void:
 	move_history[last_index]["round"] = resolve_result["round"]
 	move_history[last_index]["resource_player"] = resolve_result["resource_player"]
 	move_history[last_index]["resource_awarded"] = resolve_result["resource_awarded"]
+	move_history[last_index]["core_damage"] = resolve_result["core_damage"]
 	move_history[last_index]["winner"] = resolve_result["winner"]
+	move_history[last_index]["draw"] = resolve_result["draw"]
+
+
+func _is_draw() -> bool:
+	return int(core_hp[GameDefs.PLAYER_ONE]) <= 0 and int(core_hp[GameDefs.PLAYER_TWO]) <= 0
 
 
 func _winner() -> String:
+	if _is_draw():
+		return ""
+
 	if int(core_hp[GameDefs.PLAYER_ONE]) <= 0:
 		return GameDefs.PLAYER_TWO
 
