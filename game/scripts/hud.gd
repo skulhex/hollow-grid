@@ -12,6 +12,7 @@ signal restart_requested
 @onready var core_hp_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/CoreHpLabel
 @onready var energy_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/EnergyLabel
 @onready var resource_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ResourceLabel
+@onready var resolve_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ResolveLabel
 @onready var selected_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/SelectedLabel
 @onready var command_title: Label = $Root/CommandPanel/CommandMargin/CommandVBox/CommandTitle
 @onready var history_title: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryTitle
@@ -67,6 +68,7 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 		match_state.resources[GameDefs.PLAYER_ONE],
 		match_state.resources[GameDefs.PLAYER_TWO],
 	]
+	resolve_label.text = match_state.resolve_preview_message()
 	selected_label.text = "Mode: %s" % _action_label(selected_action_type)
 	status_label.text = match_state.status_message
 
@@ -91,6 +93,7 @@ func _apply_theme() -> void:
 	core_hp_label.add_theme_font_size_override("font_size", 16)
 	energy_label.add_theme_font_size_override("font_size", 15)
 	resource_label.add_theme_font_size_override("font_size", 15)
+	resolve_label.add_theme_font_size_override("font_size", 14)
 	selected_label.add_theme_font_size_override("font_size", 14)
 	command_title.add_theme_font_size_override("font_size", 13)
 	history_title.add_theme_font_size_override("font_size", 13)
@@ -99,6 +102,7 @@ func _apply_theme() -> void:
 	core_hp_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	energy_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	resource_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
+	resolve_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.28))
 	selected_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	command_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
 	history_title.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))

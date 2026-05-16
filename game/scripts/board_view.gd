@@ -48,7 +48,7 @@ func _draw() -> void:
 	_draw_background()
 	_draw_cells()
 	_draw_links()
-	_draw_objects()
+	_draw_objects(match_state.resolve_preview())
 
 
 func _draw_background() -> void:
@@ -113,7 +113,7 @@ func _draw_links() -> void:
 			draw_line(_cell_to_screen(cell), _cell_to_screen(neighbor), color, 5.0, true)
 
 
-func _draw_objects() -> void:
+func _draw_objects(resolve_preview: Dictionary) -> void:
 	for cell in grid.cells:
 		var object := match_state.get_object(cell)
 		if object.is_empty():
@@ -127,6 +127,11 @@ func _draw_objects() -> void:
 		if object["type"] == MatchState.OBJECT_CORE:
 			_draw_hex(center, 24.0, color, Color(0.95, 0.97, 1.0), 3.0)
 			draw_circle(center, 8.0, Color(0.95, 0.97, 1.0))
+
+			if _is_threatened_core(object_owner, resolve_preview):
+				var warning_color := Color(1.0, 0.72, 0.24)
+				draw_arc(center, 31.0, deg_to_rad(-35.0), deg_to_rad(215.0), 48, warning_color, 4.0, true)
+				draw_arc(center, 35.0, deg_to_rad(145.0), deg_to_rad(395.0), 48, warning_color.darkened(0.12), 2.0, true)
 		else:
 			if is_disabled:
 				color = Color(0.22, 0.235, 0.255)
@@ -142,6 +147,10 @@ func _draw_objects() -> void:
 				draw_line(center + Vector2(8.0, -8.0), center + Vector2(-8.0, 8.0), disabled_outline, 3.0, true)
 			else:
 				draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
+
+			if _is_threat_node(cell, resolve_preview):
+				var threat_color := GameDefs.player_color(object_owner).lightened(0.28)
+				draw_arc(center, 24.0, 0.0, TAU, 48, threat_color, 3.0, true)
 
 		if match_state.can_target_action(selected_action_type, cell):
 			draw_arc(center, 25.0, 0.0, TAU, 48, _target_color().lightened(0.18), 3.0, true)
@@ -182,3 +191,13 @@ func _control_point_color(cell: Vector2i) -> Color:
 		return Color(0.95, 0.78, 0.28)
 
 	return GameDefs.player_color(control_owner)
+
+
+func _is_threatened_core(owner_player: String, resolve_preview: Dictionary) -> bool:
+	var threatened_cores: Array = resolve_preview.get("threatened_cores", [])
+	return threatened_cores.has(owner_player)
+
+
+func _is_threat_node(cell: Vector2i, resolve_preview: Dictionary) -> bool:
+	var threat_nodes: Array = resolve_preview.get("threat_nodes", [])
+	return threat_nodes.has(cell)

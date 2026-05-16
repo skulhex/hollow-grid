@@ -266,6 +266,48 @@ func control_point_influence(cell: Vector2i, player: String) -> int:
 	return influence
 
 
+func resolve_preview() -> Dictionary:
+	var owner := control_point_owner(CONTROL_POINT)
+	var resource_awarded := 0
+
+	if not owner.is_empty():
+		resource_awarded = CONTROL_POINT_RESOURCE_GAIN
+
+	var core_preview := _core_damage_preview()
+
+	return {
+		"resource_player": owner,
+		"resource_awarded": resource_awarded,
+		"core_damage": core_preview["core_damage"],
+		"threatened_cores": core_preview["threatened_cores"],
+		"threat_nodes": core_preview["threat_nodes"],
+	}
+
+
+func resolve_preview_message() -> String:
+	var preview := resolve_preview()
+	var messages: Array[String] = []
+	var resource_player: String = preview.get("resource_player", "")
+
+	if resource_player.is_empty():
+		messages.append("contested")
+	else:
+		messages.append("%s +%dR" % [
+			_short_player_label(resource_player),
+			int(preview.get("resource_awarded", 0)),
+		])
+
+	var core_damage: Dictionary = preview.get("core_damage", {})
+
+	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		var damage_amount := int(core_damage.get(player, 0))
+
+		if damage_amount > 0:
+			messages.append("%s Core -%dHP" % [_short_player_label(player), damage_amount])
+
+	return "Resolve: %s" % ", ".join(messages)
+
+
 func contains_cell(cell: Vector2i) -> bool:
 	return abs(cell.x) <= board_radius and abs(cell.y) <= board_radius and abs(cell.x + cell.y) <= board_radius
 
@@ -437,16 +479,7 @@ func _resolve_round() -> Dictionary:
 
 
 func _apply_core_damage() -> Dictionary:
-	var damage := {
-		GameDefs.PLAYER_ONE: 0,
-		GameDefs.PLAYER_TWO: 0,
-	}
-
-	if _player_threatens_core(GameDefs.PLAYER_TWO, GameDefs.PLAYER_ONE):
-		damage[GameDefs.PLAYER_ONE] = CORE_DAMAGE_PER_RESOLVE
-
-	if _player_threatens_core(GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO):
-		damage[GameDefs.PLAYER_TWO] = CORE_DAMAGE_PER_RESOLVE
+	var damage: Dictionary = _core_damage_preview()["core_damage"]
 
 	for player in damage.keys():
 		var damage_amount: int = damage[player]
@@ -459,11 +492,41 @@ func _apply_core_damage() -> Dictionary:
 	return damage
 
 
-func _player_threatens_core(attacker: String, defender: String) -> bool:
+func _core_damage_preview() -> Dictionary:
+	var damage := {
+		GameDefs.PLAYER_ONE: 0,
+		GameDefs.PLAYER_TWO: 0,
+	}
+	var threatened_cores: Array[String] = []
+	var threat_nodes: Array[Vector2i] = []
+
+	for defender in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		var attacker := GameDefs.other_player(defender)
+		var defender_threat_nodes := _core_threat_nodes(attacker, defender)
+
+		if defender_threat_nodes.is_empty():
+			continue
+
+		damage[defender] = CORE_DAMAGE_PER_RESOLVE
+		threatened_cores.append(defender)
+
+		for cell in defender_threat_nodes:
+			if not threat_nodes.has(cell):
+				threat_nodes.append(cell)
+
+	return {
+		"core_damage": damage,
+		"threatened_cores": threatened_cores,
+		"threat_nodes": threat_nodes,
+	}
+
+
+func _core_threat_nodes(attacker: String, defender: String) -> Array[Vector2i]:
+	var threat_nodes: Array[Vector2i] = []
 	var defender_core_cell := _core_cell(defender)
 
 	if not contains_cell(defender_core_cell):
-		return false
+		return threat_nodes
 
 	for direction in HexGrid.DIRECTIONS:
 		var object := get_object(defender_core_cell + direction)
@@ -481,9 +544,9 @@ func _player_threatens_core(attacker: String, defender: String) -> bool:
 			continue
 
 		if object.get("active", false):
-			return true
+			threat_nodes.append(object["cell"])
 
-	return false
+	return threat_nodes
 
 
 func _core_cell(owner: String) -> Vector2i:
@@ -547,6 +610,16 @@ func _winner() -> String:
 		return GameDefs.PLAYER_ONE
 
 	return ""
+
+
+func _short_player_label(player: String) -> String:
+	if player == GameDefs.PLAYER_ONE:
+		return "P1"
+
+	if player == GameDefs.PLAYER_TWO:
+		return "P2"
+
+	return player
 
 
 func _update_active_nodes() -> void:
