@@ -19,6 +19,8 @@ signal restart_requested
 @onready var place_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceButton
 @onready var break_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakButton
 @onready var clear_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/ClearRow/ClearButton
+@onready var harvester_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow/HarvesterButton
+@onready var striker_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow/StrikerButton
 @onready var skip_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipButton
 @onready var restart_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow/RestartButton
 @onready var status_label: Label = $Root/CommandPanel/CommandMargin/CommandVBox/StatusLabel
@@ -37,6 +39,8 @@ signal restart_requested
 	$Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/ClearRow/ClearKeyLabel,
+	$Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow/HarvesterKeyLabel,
+	$Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow/StrikerKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow/RestartKeyLabel,
 ]
@@ -48,6 +52,8 @@ func _ready() -> void:
 	place_button.pressed.connect(_on_place_pressed)
 	break_button.pressed.connect(_on_break_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
+	harvester_button.pressed.connect(_on_harvester_pressed)
+	striker_button.pressed.connect(_on_striker_pressed)
 	skip_button.pressed.connect(_on_skip_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 
@@ -75,6 +81,8 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
 	break_button.button_pressed = selected_action_type == GameAction.TYPE_BREAK_NODE
 	clear_button.button_pressed = selected_action_type == GameAction.TYPE_CLEAR_NODE
+	harvester_button.button_pressed = selected_action_type == GameAction.TYPE_UPGRADE_HARVESTER
+	striker_button.button_pressed = selected_action_type == GameAction.TYPE_UPGRADE_STRIKER
 
 	if match_state.finished:
 		status_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.28))
@@ -116,6 +124,8 @@ func _apply_theme() -> void:
 	_style_action_button(place_button, Color(0.22, 0.58, 1.0))
 	_style_action_button(break_button, Color(1.0, 0.62, 0.22))
 	_style_action_button(clear_button, Color(0.48, 0.78, 0.38))
+	_style_action_button(harvester_button, Color(0.45, 0.86, 0.46))
+	_style_action_button(striker_button, Color(1.0, 0.72, 0.24))
 	_style_skip_button(skip_button)
 	_style_utility_button(restart_button)
 
@@ -205,6 +215,8 @@ func _apply_button_text() -> void:
 		MatchState.CLEAR_OWN_NODE_COST,
 		MatchState.CLEAR_ENEMY_NODE_COST,
 	]
+	harvester_button.text = "Upgrade Harvester (%dR)" % MatchState.HARVESTER_UPGRADE_RESOURCE_COST
+	striker_button.text = "Upgrade Striker (%dR)" % MatchState.STRIKER_UPGRADE_RESOURCE_COST
 	skip_button.text = "Pass Turn (+%dE)" % MatchState.SKIP_ENERGY_GAIN
 
 
@@ -246,6 +258,10 @@ func _short_action_label(action_type: String) -> String:
 			return "Break"
 		GameAction.TYPE_CLEAR_NODE:
 			return "Clear"
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return "Harvester"
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return "Striker"
 		GameAction.TYPE_SKIP:
 			return "Skip"
 		_:
@@ -274,6 +290,14 @@ func _on_clear_pressed() -> void:
 	action_selected.emit(GameAction.TYPE_CLEAR_NODE)
 
 
+func _on_harvester_pressed() -> void:
+	action_selected.emit(GameAction.TYPE_UPGRADE_HARVESTER)
+
+
+func _on_striker_pressed() -> void:
+	action_selected.emit(GameAction.TYPE_UPGRADE_STRIKER)
+
+
 func _on_skip_pressed() -> void:
 	skip_requested.emit()
 
@@ -290,5 +314,9 @@ func _action_label(action_type: String) -> String:
 			return "Break Node"
 		GameAction.TYPE_CLEAR_NODE:
 			return "Clear Node"
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return "Upgrade Harvester"
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return "Upgrade Striker"
 		_:
 			return action_type

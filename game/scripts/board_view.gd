@@ -141,9 +141,11 @@ func _draw_objects(resolve_preview: Dictionary) -> void:
 			draw_circle(center, 18.0, color)
 
 			if is_disabled:
+				_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), false)
 				_draw_disabled_overlay(center, GameDefs.player_color(object_owner))
 			else:
 				draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
+				_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), bool(object.get("active", false)))
 
 			if _is_threat_node(cell, resolve_preview):
 				var threat_color := GameDefs.player_color(object_owner).lightened(0.28)
@@ -178,6 +180,12 @@ func _target_color() -> Color:
 	if selected_action_type == GameAction.TYPE_CLEAR_NODE:
 		return Color(0.48, 0.78, 0.38)
 
+	if selected_action_type == GameAction.TYPE_UPGRADE_HARVESTER:
+		return _resource_color()
+
+	if selected_action_type == GameAction.TYPE_UPGRADE_STRIKER:
+		return _warning_color()
+
 	return GameDefs.player_color(match_state.current_player)
 
 
@@ -205,6 +213,28 @@ func _draw_disabled_overlay(center: Vector2, owner_color: Color) -> void:
 	draw_line(center + Vector2(cross_size, -cross_size), center + Vector2(-cross_size, cross_size), disabled_shadow, 4.2, true)
 	draw_line(center + Vector2(-cross_size, -cross_size), center + Vector2(cross_size, cross_size), disabled_mark, 2.4, true)
 	draw_line(center + Vector2(cross_size, -cross_size), center + Vector2(-cross_size, cross_size), disabled_mark, 2.4, true)
+
+
+func _draw_node_role_mark(center: Vector2, role: String, is_active: bool) -> void:
+	var alpha := 0.9 if is_active else 0.42
+
+	if role == MatchState.NODE_HARVESTER:
+		var resource_color := _resource_color()
+		resource_color.a = alpha
+		draw_arc(center, 10.5, 0.0, TAU, 36, resource_color, 2.8, true)
+	elif role == MatchState.NODE_STRIKER:
+		var warning_color := _warning_color()
+		warning_color.a = alpha
+		draw_arc(center, 10.5, 0.0, TAU, 36, warning_color, 2.8, true)
+		draw_line(center + Vector2(-5.0, 4.0), center + Vector2(5.0, -4.0), warning_color, 2.2, true)
+
+
+func _resource_color() -> Color:
+	return Color(0.45, 0.86, 0.46)
+
+
+func _warning_color() -> Color:
+	return Color(1.0, 0.72, 0.24)
 
 
 func _is_threatened_core(owner_player: String, resolve_preview: Dictionary) -> bool:

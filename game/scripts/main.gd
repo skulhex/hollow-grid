@@ -65,6 +65,10 @@ func _handle_key(event: InputEventKey) -> void:
 			_select_action(GameAction.TYPE_BREAK_NODE)
 		KEY_3:
 			_select_action(GameAction.TYPE_CLEAR_NODE)
+		KEY_4:
+			_select_action(GameAction.TYPE_UPGRADE_HARVESTER)
+		KEY_5:
+			_select_action(GameAction.TYPE_UPGRADE_STRIKER)
 		KEY_SPACE:
 			_skip_turn()
 		KEY_R:
@@ -74,8 +78,12 @@ func _handle_key(event: InputEventKey) -> void:
 func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 	if not match_state.can_target_action(selected_action_type, cell):
 		if match_state.can_target_action_shape(selected_action_type, cell) and not match_state.can_afford_target_action(match_state.current_player, selected_action_type, cell):
-			var required_cost := match_state.action_target_cost(match_state.current_player, selected_action_type, cell)
-			match_state.status_message = match_state.action_energy_requirement_message(selected_action_type, required_cost)
+			if match_state.action_uses_resource(selected_action_type):
+				var required_resource_cost := match_state.action_target_resource_cost(match_state.current_player, selected_action_type, cell)
+				match_state.status_message = match_state.action_resource_requirement_message(selected_action_type, required_resource_cost)
+			else:
+				var required_cost := match_state.action_target_cost(match_state.current_player, selected_action_type, cell)
+				match_state.status_message = match_state.action_energy_requirement_message(selected_action_type, required_cost)
 		else:
 			match_state.status_message = "Select a highlighted target for %s" % _action_label(selected_action_type)
 
@@ -92,6 +100,10 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 			return _submit_action(GameAction.break_node(match_state.current_player, cell))
 		GameAction.TYPE_CLEAR_NODE:
 			return _submit_action(GameAction.clear_node(match_state.current_player, cell))
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return _submit_action(GameAction.upgrade_harvester(match_state.current_player, cell))
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return _submit_action(GameAction.upgrade_striker(match_state.current_player, cell))
 		_:
 			return {
 				"ok": false,
@@ -106,7 +118,13 @@ func _submit_action(action: GameAction) -> Dictionary:
 
 
 func _select_action(action_type: String) -> void:
-	if action_type != GameAction.TYPE_PLACE_NODE and action_type != GameAction.TYPE_BREAK_NODE and action_type != GameAction.TYPE_CLEAR_NODE:
+	if action_type not in [
+		GameAction.TYPE_PLACE_NODE,
+		GameAction.TYPE_BREAK_NODE,
+		GameAction.TYPE_CLEAR_NODE,
+		GameAction.TYPE_UPGRADE_HARVESTER,
+		GameAction.TYPE_UPGRADE_STRIKER,
+	]:
 		return
 
 	selected_action_type = action_type
@@ -152,5 +170,9 @@ func _action_label(action_type: String) -> String:
 			return "Break"
 		GameAction.TYPE_CLEAR_NODE:
 			return "Clear"
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return "Upgrade Harvester"
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return "Upgrade Striker"
 		_:
 			return action_type

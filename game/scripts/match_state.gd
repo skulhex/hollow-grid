@@ -4,6 +4,10 @@ extends RefCounted
 const OBJECT_CORE := "core"
 const OBJECT_NODE := "node"
 
+const NODE_CONDUIT := "conduit"
+const NODE_HARVESTER := "harvester"
+const NODE_STRIKER := "striker"
+
 const CONTROL_POINT := Vector2i(0, 0)
 
 const MAX_ENERGY := 3
@@ -12,12 +16,14 @@ const START_CORE_HP := 5
 const START_RESOURCE := 0
 const TURN_ENERGY_GAIN := 1
 const SKIP_ENERGY_GAIN := 1
-const CONTROL_POINT_RESOURCE_GAIN := 1
+const HARVESTER_RESOURCE_GAIN := 1
 const CORE_DAMAGE_PER_RESOLVE := 1
 const PLACE_NODE_COST := 1
 const BREAK_NODE_COST := 2
 const CLEAR_OWN_NODE_COST := 0
 const CLEAR_ENEMY_NODE_COST := 1
+const HARVESTER_UPGRADE_RESOURCE_COST := 0
+const STRIKER_UPGRADE_RESOURCE_COST := 1
 const SKIP_COST := 0
 
 var board_radius: int
@@ -97,6 +103,10 @@ func apply_action(raw_action: Variant) -> Dictionary:
 			return _apply_break_node(action)
 		GameAction.TYPE_CLEAR_NODE:
 			return _apply_clear_node(action)
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return _apply_upgrade_node(action, NODE_HARVESTER)
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return _apply_upgrade_node(action, NODE_STRIKER)
 		GameAction.TYPE_SKIP:
 			return _apply_skip(action)
 		_:
@@ -114,6 +124,14 @@ func break_node(cell: Vector2i) -> Dictionary:
 
 func clear_node(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.clear_node(current_player, cell))
+
+
+func upgrade_harvester(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.upgrade_harvester(current_player, cell))
+
+
+func upgrade_striker(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.upgrade_striker(current_player, cell))
 
 
 func skip_turn() -> Dictionary:
@@ -175,6 +193,10 @@ func can_clear_node(cell: Vector2i) -> bool:
 	return has_active_neighbor(current_player, cell)
 
 
+func can_upgrade_node(cell: Vector2i) -> bool:
+	return _can_upgrade_node(current_player, cell)
+
+
 func can_target_action(action_type: String, cell: Vector2i) -> bool:
 	if finished:
 		return false
@@ -193,15 +215,23 @@ func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 			return can_break_node(cell)
 		GameAction.TYPE_CLEAR_NODE:
 			return can_clear_node(cell)
+		GameAction.TYPE_UPGRADE_HARVESTER, GameAction.TYPE_UPGRADE_STRIKER:
+			return can_upgrade_node(cell)
 		_:
 			return false
 
 
 func can_afford_action(player: String, action_type: String) -> bool:
+	if action_uses_resource(action_type):
+		return int(resources.get(player, 0)) >= action_resource_cost(action_type)
+
 	return int(energy.get(player, 0)) >= action_cost(action_type)
 
 
 func can_afford_target_action(player: String, action_type: String, cell: Vector2i) -> bool:
+	if action_uses_resource(action_type):
+		return int(resources.get(player, 0)) >= action_target_resource_cost(player, action_type, cell)
+
 	return int(energy.get(player, 0)) >= action_target_cost(player, action_type, cell)
 
 
@@ -219,11 +249,29 @@ func action_cost(action_type: String) -> int:
 			return 0
 
 
+func action_resource_cost(action_type: String) -> int:
+	match action_type:
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return HARVESTER_UPGRADE_RESOURCE_COST
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return STRIKER_UPGRADE_RESOURCE_COST
+
+	return 0
+
+
 func action_target_cost(player: String, action_type: String, cell: Vector2i) -> int:
 	if action_type == GameAction.TYPE_CLEAR_NODE:
 		return clear_node_cost(player, cell)
 
 	return action_cost(action_type)
+
+
+func action_target_resource_cost(_player: String, action_type: String, _cell: Vector2i) -> int:
+	return action_resource_cost(action_type)
+
+
+func action_uses_resource(action_type: String) -> bool:
+	return action_type == GameAction.TYPE_UPGRADE_HARVESTER or action_type == GameAction.TYPE_UPGRADE_STRIKER
 
 
 func clear_node_cost(player: String, cell: Vector2i) -> int:
@@ -242,6 +290,19 @@ func action_energy_requirement_message(action_type: String, required_cost: int =
 		cost = action_cost(action_type)
 
 	return "%s needs %d Energy to %s" % [
+		GameDefs.player_label(current_player),
+		cost,
+		_action_verb(action_type),
+	]
+
+
+func action_resource_requirement_message(action_type: String, required_cost: int = -1) -> String:
+	var cost := required_cost
+
+	if cost < 0:
+		cost = action_resource_cost(action_type)
+
+	return "%s needs %d Resource to %s" % [
 		GameDefs.player_label(current_player),
 		cost,
 		_action_verb(action_type),
@@ -296,17 +357,13 @@ func control_point_influence(cell: Vector2i, player: String) -> int:
 
 
 func resolve_preview() -> Dictionary:
-	var owner := control_point_owner(CONTROL_POINT)
-	var resource_awarded := 0
-
-	if not owner.is_empty():
-		resource_awarded = CONTROL_POINT_RESOURCE_GAIN
-
+	var resource_gain := _resource_preview()
 	var core_preview := _core_damage_preview()
 
 	return {
-		"resource_player": owner,
-		"resource_awarded": resource_awarded,
+		"resource_player": _single_resource_player(resource_gain),
+		"resource_awarded": _single_resource_awarded(resource_gain),
+		"resource_gain": resource_gain,
 		"core_damage": core_preview["core_damage"],
 		"threatened_cores": core_preview["threatened_cores"],
 		"threat_nodes": core_preview["threat_nodes"],
@@ -316,15 +373,20 @@ func resolve_preview() -> Dictionary:
 func resolve_preview_message() -> String:
 	var preview := resolve_preview()
 	var messages: Array[String] = []
-	var resource_player: String = preview.get("resource_player", "")
+	var resource_gain: Dictionary = preview.get("resource_gain", {})
+	var any_resource_gain := false
 
-	if resource_player.is_empty():
+	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		var gain_amount := int(resource_gain.get(player, 0))
+
+		if gain_amount <= 0:
+			continue
+
+		any_resource_gain = true
+		messages.append("%s +%dR" % [_short_player_label(player), gain_amount])
+
+	if not any_resource_gain:
 		messages.append("contested")
-	else:
-		messages.append("%s +%dR" % [
-			_short_player_label(resource_player),
-			int(preview.get("resource_awarded", 0)),
-		])
 
 	var core_damage: Dictionary = preview.get("core_damage", {})
 
@@ -434,6 +496,25 @@ func _apply_clear_node(action: GameAction) -> Dictionary:
 	return _result(true, status_message, action)
 
 
+func _apply_upgrade_node(action: GameAction, role: String) -> Dictionary:
+	if not can_upgrade_node(action.cell):
+		status_message = "%s cannot upgrade that node" % GameDefs.player_label(current_player)
+		return _result(false, status_message, action)
+
+	if not can_afford_target_action(current_player, action.action_type, action.cell):
+		var upgrade_cost := action_target_resource_cost(current_player, action.action_type, action.cell)
+		status_message = action_resource_requirement_message(action.action_type, upgrade_cost)
+		return _result(false, status_message, action)
+
+	_spend_resource(current_player, action_resource_cost(action.action_type))
+	objects[cell_key(action.cell)]["role"] = role
+	_complete_successful_action(action, "%s upgraded a %s" % [
+		GameDefs.player_label(current_player),
+		_node_role_label(role),
+	])
+	return _result(true, status_message, action)
+
+
 func _apply_skip(action: GameAction) -> Dictionary:
 	_grant_energy(current_player, SKIP_ENERGY_GAIN)
 	_complete_successful_action(action, "%s skipped" % GameDefs.player_label(current_player))
@@ -497,19 +578,21 @@ func _reset_round_actions() -> void:
 func _resolve_round() -> Dictionary:
 	_update_active_nodes()
 
-	var owner := control_point_owner(CONTROL_POINT)
-	var resource_awarded := 0
+	var resource_gain := _resource_preview()
 
-	if not owner.is_empty():
-		resources[owner] += CONTROL_POINT_RESOURCE_GAIN
-		resource_awarded = CONTROL_POINT_RESOURCE_GAIN
+	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		var gain_amount := int(resource_gain.get(player, 0))
+
+		if gain_amount > 0:
+			resources[player] += gain_amount
 
 	var core_damage := _apply_core_damage()
 
 	return {
 		"round": round_number,
-		"resource_player": owner,
-		"resource_awarded": resource_awarded,
+		"resource_player": _single_resource_player(resource_gain),
+		"resource_awarded": _single_resource_awarded(resource_gain),
+		"resource_gain": resource_gain,
 		"core_damage": core_damage,
 		"winner": _winner(),
 		"draw": _is_draw(),
@@ -578,6 +661,9 @@ func _core_threat_nodes(attacker: String, defender: String) -> Array[Vector2i]:
 		if object.get("type") != OBJECT_NODE:
 			continue
 
+		if object.get("role", NODE_CONDUIT) != NODE_STRIKER:
+			continue
+
 		if object.get("disabled", false):
 			continue
 
@@ -599,15 +685,23 @@ func _core_cell(owner: String) -> Vector2i:
 
 func _resolve_result_message(resolve_result: Dictionary) -> String:
 	var messages: Array[String] = []
-	var resource_player: String = resolve_result.get("resource_player", "")
+	var resource_gain: Dictionary = resolve_result.get("resource_gain", {})
+	var any_resource_gain := false
 
-	if resource_player.is_empty():
-		messages.append("Round contested: no resource")
-	else:
+	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		var gain_amount := int(resource_gain.get(player, 0))
+
+		if gain_amount <= 0:
+			continue
+
+		any_resource_gain = true
 		messages.append("Round resource: %s +%dR" % [
-			GameDefs.player_label(resource_player),
-			int(resolve_result.get("resource_awarded", 0)),
+			GameDefs.player_label(player),
+			gain_amount,
 		])
+
+	if not any_resource_gain:
+		messages.append("Round contested: no resource")
 
 	var core_damage: Dictionary = resolve_result.get("core_damage", {})
 
@@ -628,6 +722,7 @@ func _annotate_last_move(resolve_result: Dictionary) -> void:
 	move_history[last_index]["round"] = resolve_result["round"]
 	move_history[last_index]["resource_player"] = resolve_result["resource_player"]
 	move_history[last_index]["resource_awarded"] = resolve_result["resource_awarded"]
+	move_history[last_index]["resource_gain"] = resolve_result["resource_gain"]
 	move_history[last_index]["core_damage"] = resolve_result["core_damage"]
 	move_history[last_index]["winner"] = resolve_result["winner"]
 	move_history[last_index]["draw"] = resolve_result["draw"]
@@ -706,8 +801,88 @@ func _mark_active_network(owner: String) -> void:
 			queue.append(neighbor)
 
 
+func _can_upgrade_node(player: String, cell: Vector2i) -> bool:
+	if not contains_cell(cell):
+		return false
+
+	var object := get_object(cell)
+
+	if object.is_empty():
+		return false
+
+	if object.get("type") != OBJECT_NODE:
+		return false
+
+	if object.get("owner") != player:
+		return false
+
+	if object.get("disabled", false):
+		return false
+
+	if not object.get("active", false):
+		return false
+
+	return object.get("role", NODE_CONDUIT) == NODE_CONDUIT
+
+
+func _resource_preview() -> Dictionary:
+	return {
+		GameDefs.PLAYER_ONE: _harvester_resource_gain(GameDefs.PLAYER_ONE),
+		GameDefs.PLAYER_TWO: _harvester_resource_gain(GameDefs.PLAYER_TWO),
+	}
+
+
+func _harvester_resource_gain(player: String) -> int:
+	for direction in HexGrid.DIRECTIONS:
+		var object := get_object(CONTROL_POINT + direction)
+
+		if object.is_empty():
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		if object.get("type") != OBJECT_NODE:
+			continue
+
+		if object.get("role", NODE_CONDUIT) != NODE_HARVESTER:
+			continue
+
+		if object.get("disabled", false):
+			continue
+
+		if object.get("active", false):
+			return HARVESTER_RESOURCE_GAIN
+
+	return 0
+
+
+func _single_resource_player(resource_gain: Dictionary) -> String:
+	var resource_player := ""
+
+	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
+		if int(resource_gain.get(player, 0)) <= 0:
+			continue
+
+		if not resource_player.is_empty():
+			return ""
+
+		resource_player = player
+
+	return resource_player
+
+
+func _single_resource_awarded(resource_gain: Dictionary) -> int:
+	var resource_player := _single_resource_player(resource_gain)
+
+	if resource_player.is_empty():
+		return 0
+
+	return int(resource_gain.get(resource_player, 0))
+
+
 func _add_object(cell: Vector2i, type: String, owner: String) -> void:
-	objects[cell_key(cell)] = {
+	var object := {
 		"cell": cell,
 		"type": type,
 		"owner": owner,
@@ -715,9 +890,18 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 		"disabled": false,
 	}
 
+	if type == OBJECT_NODE:
+		object["role"] = NODE_CONDUIT
+
+	objects[cell_key(cell)] = object
+
 
 func _spend_energy(player: String, amount: int) -> void:
 	energy[player] = maxi(0, int(energy.get(player, 0)) - amount)
+
+
+func _spend_resource(player: String, amount: int) -> void:
+	resources[player] = maxi(0, int(resources.get(player, 0)) - amount)
 
 
 func _grant_energy(player: String, amount: int) -> void:
@@ -732,10 +916,24 @@ func _action_verb(action_type: String) -> String:
 			return "break"
 		GameAction.TYPE_CLEAR_NODE:
 			return "clear"
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return "upgrade a Harvester"
+		GameAction.TYPE_UPGRADE_STRIKER:
+			return "upgrade a Striker"
 		GameAction.TYPE_SKIP:
 			return "skip"
 		_:
 			return action_type
+
+
+func _node_role_label(role: String) -> String:
+	match role:
+		NODE_HARVESTER:
+			return "Harvester"
+		NODE_STRIKER:
+			return "Striker"
+		_:
+			return "Conduit"
 
 
 func _parse_action(raw_action: Variant) -> GameAction:
