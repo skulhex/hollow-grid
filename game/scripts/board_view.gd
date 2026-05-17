@@ -48,6 +48,7 @@ func _draw() -> void:
 	_draw_background()
 	_draw_cells()
 	_draw_links()
+	_draw_harvester_control_links()
 	_draw_objects(match_state.resolve_preview())
 
 
@@ -111,6 +112,34 @@ func _draw_links() -> void:
 
 			var color := GameDefs.player_color(object["owner"]).lightened(0.08)
 			draw_line(_cell_to_screen(cell), _cell_to_screen(neighbor), color, 5.0, true)
+
+
+func _draw_harvester_control_links() -> void:
+	if not grid.contains(MatchState.CONTROL_POINT):
+		return
+
+	var control_center := _cell_to_screen(MatchState.CONTROL_POINT)
+
+	for direction in HexGrid.DIRECTIONS:
+		var cell := MatchState.CONTROL_POINT + direction
+		var object := match_state.get_object(cell)
+
+		if object.is_empty():
+			continue
+
+		if object.get("type") != MatchState.OBJECT_NODE:
+			continue
+
+		if object.get("role", MatchState.NODE_CONDUIT) != MatchState.NODE_HARVESTER:
+			continue
+
+		if object.get("disabled", false) or not object.get("active", false):
+			continue
+
+		var owner_color := GameDefs.player_color(object["owner"])
+		var resource_color := _resource_color().lerp(owner_color, 0.32)
+		draw_line(_cell_to_screen(cell), control_center, resource_color, 3.0, true)
+		draw_arc(control_center, 24.0, 0.0, TAU, 48, resource_color, 2.0, true)
 
 
 func _draw_objects(resolve_preview: Dictionary) -> void:
@@ -189,13 +218,8 @@ func _target_color() -> Color:
 	return GameDefs.player_color(match_state.current_player)
 
 
-func _control_point_color(cell: Vector2i) -> Color:
-	var control_owner := match_state.control_point_owner(cell)
-
-	if control_owner.is_empty():
-		return Color(0.95, 0.78, 0.28)
-
-	return GameDefs.player_color(control_owner)
+func _control_point_color(_cell: Vector2i) -> Color:
+	return Color(0.95, 0.78, 0.28)
 
 
 func _disabled_owner_fill(owner_color: Color) -> Color:

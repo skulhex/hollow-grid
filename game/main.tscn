@@ -155,7 +155,7 @@ custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Upgrade Harvester (0R)"
+text = "Upgrade Harvester (1R)"
 
 [node name="HarvesterKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow"]
 custom_minimum_size = Vector2(44, 42)
