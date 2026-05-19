@@ -14,8 +14,8 @@ const START_CORE_HP := 5
 const START_RESOURCE := 1
 const CONNECTION_ACTIONS_PER_TURN := 1
 const REPAIR_ACTIONS_PER_TURN := 1
+const NODE_ROLE_ACTION_CHARGES_PER_TURN := 1
 const HARVESTER_RESOURCE_GAIN := 1
-const CORE_DAMAGE_PER_RESOLVE := 1
 const HARVESTER_UPGRADE_RESOURCE_COST := 1
 const STRIKER_UPGRADE_RESOURCE_COST := 1
 
@@ -29,7 +29,7 @@ var resources: Dictionary = {
 	GameDefs.PLAYER_ONE: START_RESOURCE,
 	GameDefs.PLAYER_TWO: START_RESOURCE,
 }
-var acted_this_round: Dictionary = {
+var ended_turn_this_round: Dictionary = {
 	GameDefs.PLAYER_ONE: false,
 	GameDefs.PLAYER_TWO: false,
 }
@@ -40,6 +40,7 @@ var turn_number := 1
 var round_number := 1
 var connection_actions_left := CONNECTION_ACTIONS_PER_TURN
 var repair_actions_left := REPAIR_ACTIONS_PER_TURN
+var upkeep_message := "Upkeep: ready"
 var move_history: Array[Dictionary] = []
 
 
@@ -57,6 +58,7 @@ func setup_match() -> void:
 	_reset_round_actions()
 	current_player = GameDefs.PLAYER_ONE
 	_reset_turn_action_limits()
+	upkeep_message = "Upkeep: ready"
 	finished = false
 	status_message = "%s: build, repair, upgrade, or end turn" % GameDefs.player_label(current_player)
 	turn_number = 1
@@ -363,49 +365,6 @@ func control_point_influence(cell: Vector2i, player: String) -> int:
 	return influence
 
 
-func resolve_preview() -> Dictionary:
-	var resource_gain := _resource_preview()
-	var core_preview := _core_damage_preview()
-
-	return {
-		"resource_player": _single_resource_player(resource_gain),
-		"resource_awarded": _single_resource_awarded(resource_gain),
-		"resource_gain": resource_gain,
-		"core_damage": core_preview["core_damage"],
-		"threatened_cores": core_preview["threatened_cores"],
-		"threat_nodes": core_preview["threat_nodes"],
-	}
-
-
-func resolve_preview_message() -> String:
-	var preview := resolve_preview()
-	var messages: Array[String] = []
-	var resource_gain: Dictionary = preview.get("resource_gain", {})
-	var any_resource_gain := false
-
-	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		var gain_amount := int(resource_gain.get(player, 0))
-
-		if gain_amount <= 0:
-			continue
-
-		any_resource_gain = true
-		messages.append("%s +%dR" % [_short_player_label(player), gain_amount])
-
-	if not any_resource_gain:
-		messages.append("contested")
-
-	var core_damage: Dictionary = preview.get("core_damage", {})
-
-	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		var damage_amount := int(core_damage.get(player, 0))
-
-		if damage_amount > 0:
-			messages.append("%s Core -%dHP" % [_short_player_label(player), damage_amount])
-
-	return "Resolve: %s" % ", ".join(messages)
-
-
 func contains_cell(cell: Vector2i) -> bool:
 	return abs(cell.x) <= board_radius and abs(cell.y) <= board_radius and abs(cell.x + cell.y) <= board_radius
 
@@ -526,6 +485,7 @@ func _apply_upgrade_node(action: GameAction, role: String) -> Dictionary:
 
 	_spend_resource(current_player, action_resource_cost(action.action_type))
 	objects[cell_key(action.cell)]["role"] = role
+	objects[cell_key(action.cell)]["action_charges"] = NODE_ROLE_ACTION_CHARGES_PER_TURN
 	_complete_successful_action(action, "%s upgraded a %s" % [
 		GameDefs.player_label(current_player),
 		_node_role_label(role),
@@ -547,7 +507,7 @@ func _complete_successful_action(action: GameAction, message: String) -> void:
 
 func _complete_turn(action: GameAction, message: String) -> void:
 	_record_move(action, message)
-	acted_this_round[action.player] = true
+	ended_turn_this_round[action.player] = true
 	_end_turn(message)
 	turn_number += 1
 
@@ -570,10 +530,7 @@ func _end_turn(message: String) -> void:
 	_update_active_nodes()
 	var final_message := message
 
-	if _round_ready_to_resolve():
-		var resolve_result := _resolve_round()
-		_annotate_last_move(resolve_result)
-		final_message = "%s. %s" % [message, _resolve_result_message(resolve_result)]
+	if _round_ready_to_advance():
 		round_number += 1
 		_reset_round_actions()
 
@@ -586,171 +543,18 @@ func _end_turn(message: String) -> void:
 			finished = true
 			status_message = "%s. %s wins" % [final_message, GameDefs.player_label(winner)]
 		else:
-			status_message = final_message
 			current_player = GameDefs.other_player(current_player)
-			_reset_turn_action_limits()
+			_start_turn_for_player(current_player)
+			status_message = "%s. %s" % [final_message, upkeep_message]
 
 
-func _round_ready_to_resolve() -> bool:
-	return bool(acted_this_round[GameDefs.PLAYER_ONE]) and bool(acted_this_round[GameDefs.PLAYER_TWO])
+func _round_ready_to_advance() -> bool:
+	return bool(ended_turn_this_round[GameDefs.PLAYER_ONE]) and bool(ended_turn_this_round[GameDefs.PLAYER_TWO])
 
 
 func _reset_round_actions() -> void:
-	acted_this_round[GameDefs.PLAYER_ONE] = false
-	acted_this_round[GameDefs.PLAYER_TWO] = false
-
-
-func _resolve_round() -> Dictionary:
-	_update_active_nodes()
-
-	var resource_gain := _resource_preview()
-
-	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		var gain_amount := int(resource_gain.get(player, 0))
-
-		if gain_amount > 0:
-			resources[player] += gain_amount
-
-	var core_damage := _apply_core_damage()
-
-	return {
-		"round": round_number,
-		"resource_player": _single_resource_player(resource_gain),
-		"resource_awarded": _single_resource_awarded(resource_gain),
-		"resource_gain": resource_gain,
-		"core_damage": core_damage,
-		"winner": _winner(),
-		"draw": _is_draw(),
-	}
-
-
-func _apply_core_damage() -> Dictionary:
-	var damage: Dictionary = _core_damage_preview()["core_damage"]
-
-	for player in damage.keys():
-		var damage_amount: int = damage[player]
-
-		if damage_amount <= 0:
-			continue
-
-		core_hp[player] = maxi(0, int(core_hp[player]) - damage_amount)
-
-	return damage
-
-
-func _core_damage_preview() -> Dictionary:
-	var damage := {
-		GameDefs.PLAYER_ONE: 0,
-		GameDefs.PLAYER_TWO: 0,
-	}
-	var threatened_cores: Array[String] = []
-	var threat_nodes: Array[Vector2i] = []
-
-	for defender in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		var attacker := GameDefs.other_player(defender)
-		var defender_threat_nodes := _core_threat_nodes(attacker, defender)
-
-		if defender_threat_nodes.is_empty():
-			continue
-
-		damage[defender] = CORE_DAMAGE_PER_RESOLVE
-		threatened_cores.append(defender)
-
-		for cell in defender_threat_nodes:
-			if not threat_nodes.has(cell):
-				threat_nodes.append(cell)
-
-	return {
-		"core_damage": damage,
-		"threatened_cores": threatened_cores,
-		"threat_nodes": threat_nodes,
-	}
-
-
-func _core_threat_nodes(attacker: String, defender: String) -> Array[Vector2i]:
-	var threat_nodes: Array[Vector2i] = []
-	var defender_core_cell := _core_cell(defender)
-
-	if not contains_cell(defender_core_cell):
-		return threat_nodes
-
-	for direction in HexGrid.DIRECTIONS:
-		var object := get_object(defender_core_cell + direction)
-
-		if object.is_empty():
-			continue
-
-		if object.get("owner") != attacker:
-			continue
-
-		if object.get("type") != OBJECT_NODE:
-			continue
-
-		if object.get("role", NODE_CONDUIT) != NODE_STRIKER:
-			continue
-
-		if object.get("disabled", false):
-			continue
-
-		if object.get("active", false):
-			threat_nodes.append(object["cell"])
-
-	return threat_nodes
-
-
-func _core_cell(owner: String) -> Vector2i:
-	for key in objects.keys():
-		var object: Dictionary = objects[key]
-
-		if object.get("type") == OBJECT_CORE and object.get("owner") == owner:
-			return object["cell"]
-
-	return Vector2i(999, 999)
-
-
-func _resolve_result_message(resolve_result: Dictionary) -> String:
-	var messages: Array[String] = []
-	var resource_gain: Dictionary = resolve_result.get("resource_gain", {})
-	var any_resource_gain := false
-
-	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		var gain_amount := int(resource_gain.get(player, 0))
-
-		if gain_amount <= 0:
-			continue
-
-		any_resource_gain = true
-		messages.append("Round resource: %s +%dR" % [
-			GameDefs.player_label(player),
-			gain_amount,
-		])
-
-	if not any_resource_gain:
-		messages.append("Round contested: no resource")
-
-	var core_damage: Dictionary = resolve_result.get("core_damage", {})
-
-	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		var damage_amount := int(core_damage.get(player, 0))
-
-		if damage_amount > 0:
-			messages.append("%s Core -%dHP" % [GameDefs.player_label(player), damage_amount])
-
-	return ". ".join(messages)
-
-
-func _annotate_last_move(resolve_result: Dictionary) -> void:
-	if move_history.is_empty():
-		return
-
-	var last_index := move_history.size() - 1
-	move_history[last_index]["round"] = resolve_result["round"]
-	move_history[last_index]["resource_player"] = resolve_result["resource_player"]
-	move_history[last_index]["resource_awarded"] = resolve_result["resource_awarded"]
-	move_history[last_index]["resource_gain"] = resolve_result["resource_gain"]
-	move_history[last_index]["core_damage"] = resolve_result["core_damage"]
-	move_history[last_index]["winner"] = resolve_result["winner"]
-	move_history[last_index]["draw"] = resolve_result["draw"]
+	ended_turn_this_round[GameDefs.PLAYER_ONE] = false
+	ended_turn_this_round[GameDefs.PLAYER_TWO] = false
 
 
 func _is_draw() -> bool:
@@ -768,16 +572,6 @@ func _winner() -> String:
 		return GameDefs.PLAYER_ONE
 
 	return ""
-
-
-func _short_player_label(player: String) -> String:
-	if player == GameDefs.PLAYER_ONE:
-		return "P1"
-
-	if player == GameDefs.PLAYER_TWO:
-		return "P2"
-
-	return player
 
 
 func _update_active_nodes() -> void:
@@ -850,13 +644,6 @@ func _can_upgrade_node(player: String, cell: Vector2i) -> bool:
 	return object.get("role", NODE_CONDUIT) == NODE_CONDUIT
 
 
-func _resource_preview() -> Dictionary:
-	return {
-		GameDefs.PLAYER_ONE: _harvester_resource_gain(GameDefs.PLAYER_ONE),
-		GameDefs.PLAYER_TWO: _harvester_resource_gain(GameDefs.PLAYER_TWO),
-	}
-
-
 func _harvester_resource_gain(player: String) -> int:
 	for direction in HexGrid.DIRECTIONS:
 		var object := get_object(CONTROL_POINT + direction)
@@ -882,30 +669,6 @@ func _harvester_resource_gain(player: String) -> int:
 	return 0
 
 
-func _single_resource_player(resource_gain: Dictionary) -> String:
-	var resource_player := ""
-
-	for player in [GameDefs.PLAYER_ONE, GameDefs.PLAYER_TWO]:
-		if int(resource_gain.get(player, 0)) <= 0:
-			continue
-
-		if not resource_player.is_empty():
-			return ""
-
-		resource_player = player
-
-	return resource_player
-
-
-func _single_resource_awarded(resource_gain: Dictionary) -> int:
-	var resource_player := _single_resource_player(resource_gain)
-
-	if resource_player.is_empty():
-		return 0
-
-	return int(resource_gain.get(resource_player, 0))
-
-
 func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 	var object := {
 		"cell": cell,
@@ -917,8 +680,67 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 
 	if type == OBJECT_NODE:
 		object["role"] = NODE_CONDUIT
+		object["action_charges"] = 0
 
 	objects[cell_key(cell)] = object
+
+
+func _start_turn_for_player(player: String) -> void:
+	_update_active_nodes()
+	_reset_turn_action_limits()
+
+	var resource_gain := _harvester_resource_gain(player)
+
+	if resource_gain > 0:
+		resources[player] += resource_gain
+
+	var charged_nodes := _reset_role_node_action_charges(player)
+	upkeep_message = _format_upkeep_message(player, resource_gain, charged_nodes)
+
+
+func _reset_role_node_action_charges(player: String) -> int:
+	var charged_nodes := 0
+
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") != OBJECT_NODE:
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		if object.get("role", NODE_CONDUIT) == NODE_CONDUIT:
+			object["action_charges"] = 0
+			objects[key] = object
+			continue
+
+		object["action_charges"] = NODE_ROLE_ACTION_CHARGES_PER_TURN
+		objects[key] = object
+		charged_nodes += 1
+
+	return charged_nodes
+
+
+func _format_upkeep_message(player: String, resource_gain: int, charged_nodes: int) -> String:
+	var messages: Array[String] = []
+
+	if resource_gain > 0:
+		messages.append("+%dR" % resource_gain)
+
+	if charged_nodes > 0:
+		messages.append("%d role charge%s ready" % [
+			charged_nodes,
+			"" if charged_nodes == 1 else "s",
+		])
+
+	if messages.is_empty():
+		messages.append("ready")
+
+	return "Upkeep: %s %s" % [
+		GameDefs.player_label(player),
+		", ".join(messages),
+	]
 
 
 func _spend_resource(player: String, amount: int) -> void:

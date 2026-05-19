@@ -57,9 +57,9 @@ text = "Actions: Connect 1 / Repair 1"
 layout_mode = 2
 text = "Resource: P1 0 / P2 0"
 
-[node name="ResolveLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="UpkeepLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
-text = "Resolve: contested"
+text = "Upkeep: ready"
 
 [node name="SelectedLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
