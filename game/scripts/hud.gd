@@ -10,15 +10,15 @@ signal restart_requested
 @onready var history_panel: PanelContainer = $Root/HistoryPanel
 @onready var turn_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/TurnLabel
 @onready var core_hp_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/CoreHpLabel
-@onready var energy_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/EnergyLabel
+@onready var action_limit_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ActionLimitLabel
 @onready var resource_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ResourceLabel
 @onready var resolve_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ResolveLabel
 @onready var selected_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/SelectedLabel
 @onready var command_title: Label = $Root/CommandPanel/CommandMargin/CommandVBox/CommandTitle
 @onready var history_title: Label = $Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryTitle
 @onready var place_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceButton
-@onready var break_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakButton
-@onready var clear_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/ClearRow/ClearButton
+@onready var repair_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/RepairRow/RepairButton
+@onready var clear_row: HBoxContainer = $Root/CommandPanel/CommandMargin/CommandVBox/ClearRow
 @onready var harvester_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow/HarvesterButton
 @onready var striker_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow/StrikerButton
 @onready var skip_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipButton
@@ -37,8 +37,7 @@ signal restart_requested
 ]
 @onready var key_labels: Array[Label] = [
 	$Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow/PlaceKeyLabel,
-	$Root/CommandPanel/CommandMargin/CommandVBox/BreakRow/BreakKeyLabel,
-	$Root/CommandPanel/CommandMargin/CommandVBox/ClearRow/ClearKeyLabel,
+	$Root/CommandPanel/CommandMargin/CommandVBox/RepairRow/RepairKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow/HarvesterKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow/StrikerKeyLabel,
 	$Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipKeyLabel,
@@ -50,12 +49,12 @@ func _ready() -> void:
 	_apply_theme()
 	_apply_button_text()
 	place_button.pressed.connect(_on_place_pressed)
-	break_button.pressed.connect(_on_break_pressed)
-	clear_button.pressed.connect(_on_clear_pressed)
+	repair_button.pressed.connect(_on_repair_pressed)
 	harvester_button.pressed.connect(_on_harvester_pressed)
 	striker_button.pressed.connect(_on_striker_pressed)
 	skip_button.pressed.connect(_on_skip_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
+	clear_row.visible = false
 
 
 func refresh(match_state: MatchState, selected_action_type: String) -> void:
@@ -66,9 +65,9 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 		match_state.core_hp[GameDefs.PLAYER_ONE],
 		match_state.core_hp[GameDefs.PLAYER_TWO],
 	]
-	energy_label.text = "Energy: P1 %d / P2 %d" % [
-		match_state.energy[GameDefs.PLAYER_ONE],
-		match_state.energy[GameDefs.PLAYER_TWO],
+	action_limit_label.text = "Actions: Connect %d / Repair %d" % [
+		match_state.connection_actions_left,
+		match_state.repair_actions_left,
 	]
 	resource_label.text = "Resource: P1 %d / P2 %d" % [
 		match_state.resources[GameDefs.PLAYER_ONE],
@@ -79,8 +78,7 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 	status_label.text = match_state.status_message
 
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
-	break_button.button_pressed = selected_action_type == GameAction.TYPE_BREAK_NODE
-	clear_button.button_pressed = selected_action_type == GameAction.TYPE_CLEAR_NODE
+	repair_button.button_pressed = selected_action_type == GameAction.TYPE_REPAIR_NODE
 	harvester_button.button_pressed = selected_action_type == GameAction.TYPE_UPGRADE_HARVESTER
 	striker_button.button_pressed = selected_action_type == GameAction.TYPE_UPGRADE_STRIKER
 
@@ -99,7 +97,7 @@ func _apply_theme() -> void:
 
 	turn_label.add_theme_font_size_override("font_size", 20)
 	core_hp_label.add_theme_font_size_override("font_size", 16)
-	energy_label.add_theme_font_size_override("font_size", 15)
+	action_limit_label.add_theme_font_size_override("font_size", 15)
 	resource_label.add_theme_font_size_override("font_size", 15)
 	resolve_label.add_theme_font_size_override("font_size", 14)
 	selected_label.add_theme_font_size_override("font_size", 14)
@@ -108,7 +106,7 @@ func _apply_theme() -> void:
 	status_label.add_theme_font_size_override("font_size", 15)
 
 	core_hp_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
-	energy_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
+	action_limit_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	resource_label.add_theme_color_override("font_color", Color(0.88, 0.9, 0.92))
 	resolve_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.28))
 	selected_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68))
@@ -122,8 +120,7 @@ func _apply_theme() -> void:
 		history_row.add_theme_color_override("font_color", Color(0.82, 0.86, 0.9))
 
 	_style_action_button(place_button, Color(0.22, 0.58, 1.0))
-	_style_action_button(break_button, Color(1.0, 0.62, 0.22))
-	_style_action_button(clear_button, Color(0.48, 0.78, 0.38))
+	_style_action_button(repair_button, Color(0.48, 0.78, 0.38))
 	_style_action_button(harvester_button, Color(0.45, 0.86, 0.46))
 	_style_action_button(striker_button, Color(1.0, 0.72, 0.24))
 	_style_skip_button(skip_button)
@@ -209,15 +206,11 @@ func _key_style() -> StyleBoxFlat:
 
 
 func _apply_button_text() -> void:
-	place_button.text = "Place Node (%dE)" % MatchState.PLACE_NODE_COST
-	break_button.text = "Break Node (%dE)" % MatchState.BREAK_NODE_COST
-	clear_button.text = "Clear Node (%d/%dE)" % [
-		MatchState.CLEAR_OWN_NODE_COST,
-		MatchState.CLEAR_ENEMY_NODE_COST,
-	]
+	place_button.text = "Place Node"
+	repair_button.text = "Repair Node"
 	harvester_button.text = "Upgrade Harvester (%dR)" % MatchState.HARVESTER_UPGRADE_RESOURCE_COST
 	striker_button.text = "Upgrade Striker (%dR)" % MatchState.STRIKER_UPGRADE_RESOURCE_COST
-	skip_button.text = "Pass Turn (+%dE)" % MatchState.SKIP_ENERGY_GAIN
+	skip_button.text = "End Turn"
 
 
 func _refresh_history(move_history: Array[Dictionary]) -> void:
@@ -254,16 +247,14 @@ func _short_action_label(action_type: String) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return "Place"
-		GameAction.TYPE_BREAK_NODE:
-			return "Break"
-		GameAction.TYPE_CLEAR_NODE:
-			return "Clear"
+		GameAction.TYPE_REPAIR_NODE:
+			return "Repair"
 		GameAction.TYPE_UPGRADE_HARVESTER:
 			return "Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Striker"
 		GameAction.TYPE_SKIP:
-			return "Skip"
+			return "End"
 		_:
 			return action_type
 
@@ -282,12 +273,8 @@ func _on_place_pressed() -> void:
 	action_selected.emit(GameAction.TYPE_PLACE_NODE)
 
 
-func _on_break_pressed() -> void:
-	action_selected.emit(GameAction.TYPE_BREAK_NODE)
-
-
-func _on_clear_pressed() -> void:
-	action_selected.emit(GameAction.TYPE_CLEAR_NODE)
+func _on_repair_pressed() -> void:
+	action_selected.emit(GameAction.TYPE_REPAIR_NODE)
 
 
 func _on_harvester_pressed() -> void:
@@ -310,10 +297,8 @@ func _action_label(action_type: String) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return "Place Node"
-		GameAction.TYPE_BREAK_NODE:
-			return "Break Node"
-		GameAction.TYPE_CLEAR_NODE:
-			return "Clear Node"
+		GameAction.TYPE_REPAIR_NODE:
+			return "Repair Node"
 		GameAction.TYPE_UPGRADE_HARVESTER:
 			return "Upgrade Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:

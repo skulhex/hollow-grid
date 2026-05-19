@@ -10,28 +10,17 @@ const NODE_STRIKER := "striker"
 
 const CONTROL_POINT := Vector2i(0, 0)
 
-const MAX_ENERGY := 3
-const START_ENERGY := 1
 const START_CORE_HP := 5
 const START_RESOURCE := 1
-const TURN_ENERGY_GAIN := 1
-const SKIP_ENERGY_GAIN := 1
+const CONNECTION_ACTIONS_PER_TURN := 1
+const REPAIR_ACTIONS_PER_TURN := 1
 const HARVESTER_RESOURCE_GAIN := 1
 const CORE_DAMAGE_PER_RESOLVE := 1
-const PLACE_NODE_COST := 1
-const BREAK_NODE_COST := 2
-const CLEAR_OWN_NODE_COST := 0
-const CLEAR_ENEMY_NODE_COST := 1
 const HARVESTER_UPGRADE_RESOURCE_COST := 1
 const STRIKER_UPGRADE_RESOURCE_COST := 1
-const SKIP_COST := 0
 
 var board_radius: int
 var objects: Dictionary = {}
-var energy: Dictionary = {
-	GameDefs.PLAYER_ONE: START_ENERGY,
-	GameDefs.PLAYER_TWO: START_ENERGY,
-}
 var core_hp: Dictionary = {
 	GameDefs.PLAYER_ONE: START_CORE_HP,
 	GameDefs.PLAYER_TWO: START_CORE_HP,
@@ -46,9 +35,11 @@ var acted_this_round: Dictionary = {
 }
 var current_player := GameDefs.PLAYER_ONE
 var finished := false
-var status_message := "Player 1: place a node"
+var status_message := "Player 1: build, repair, upgrade, or end turn"
 var turn_number := 1
 var round_number := 1
+var connection_actions_left := CONNECTION_ACTIONS_PER_TURN
+var repair_actions_left := REPAIR_ACTIONS_PER_TURN
 var move_history: Array[Dictionary] = []
 
 
@@ -59,20 +50,18 @@ func _init(start_board_radius: int = 3) -> void:
 
 func setup_match() -> void:
 	objects.clear()
-	energy[GameDefs.PLAYER_ONE] = START_ENERGY
-	energy[GameDefs.PLAYER_TWO] = START_ENERGY
 	core_hp[GameDefs.PLAYER_ONE] = START_CORE_HP
 	core_hp[GameDefs.PLAYER_TWO] = START_CORE_HP
 	resources[GameDefs.PLAYER_ONE] = START_RESOURCE
 	resources[GameDefs.PLAYER_TWO] = START_RESOURCE
 	_reset_round_actions()
 	current_player = GameDefs.PLAYER_ONE
+	_reset_turn_action_limits()
 	finished = false
-	status_message = "%s: place a node" % GameDefs.player_label(current_player)
+	status_message = "%s: build, repair, upgrade, or end turn" % GameDefs.player_label(current_player)
 	turn_number = 1
 	round_number = 1
 	move_history.clear()
-	_grant_energy(current_player, TURN_ENERGY_GAIN)
 
 	_add_object(Vector2i(-board_radius, 0), OBJECT_CORE, GameDefs.PLAYER_ONE)
 	_add_object(Vector2i(board_radius, 0), OBJECT_CORE, GameDefs.PLAYER_TWO)
@@ -99,6 +88,8 @@ func apply_action(raw_action: Variant) -> Dictionary:
 	match action.action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return _apply_place_node(action)
+		GameAction.TYPE_REPAIR_NODE:
+			return _apply_repair_node(action)
 		GameAction.TYPE_BREAK_NODE:
 			return _apply_break_node(action)
 		GameAction.TYPE_CLEAR_NODE:
@@ -116,6 +107,10 @@ func apply_action(raw_action: Variant) -> Dictionary:
 
 func place_node(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.place_node(current_player, cell))
+
+
+func repair_node(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.repair_node(current_player, cell))
 
 
 func break_node(cell: Vector2i) -> Dictionary:
@@ -172,6 +167,24 @@ func can_break_node(cell: Vector2i) -> bool:
 	return has_active_neighbor(current_player, cell)
 
 
+func can_repair_node(cell: Vector2i) -> bool:
+	if not contains_cell(cell):
+		return false
+
+	var object := get_object(cell)
+
+	if object.is_empty():
+		return false
+
+	if object.get("type") != OBJECT_NODE:
+		return false
+
+	if object.get("owner") != current_player:
+		return false
+
+	return object.get("disabled", false)
+
+
 func can_clear_node(cell: Vector2i) -> bool:
 	if not contains_cell(cell):
 		return false
@@ -211,6 +224,8 @@ func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return can_place_node(cell)
+		GameAction.TYPE_REPAIR_NODE:
+			return can_repair_node(cell)
 		GameAction.TYPE_BREAK_NODE:
 			return can_break_node(cell)
 		GameAction.TYPE_CLEAR_NODE:
@@ -225,28 +240,26 @@ func can_afford_action(player: String, action_type: String) -> bool:
 	if action_uses_resource(action_type):
 		return int(resources.get(player, 0)) >= action_resource_cost(action_type)
 
-	return int(energy.get(player, 0)) >= action_cost(action_type)
+	if action_uses_connection_limit(action_type):
+		return connection_actions_left > 0
+
+	if action_uses_repair_limit(action_type):
+		return repair_actions_left > 0
+
+	return true
 
 
 func can_afford_target_action(player: String, action_type: String, cell: Vector2i) -> bool:
 	if action_uses_resource(action_type):
 		return int(resources.get(player, 0)) >= action_target_resource_cost(player, action_type, cell)
 
-	return int(energy.get(player, 0)) >= action_target_cost(player, action_type, cell)
+	if action_uses_connection_limit(action_type):
+		return connection_actions_left > 0
 
+	if action_uses_repair_limit(action_type):
+		return repair_actions_left > 0
 
-func action_cost(action_type: String) -> int:
-	match action_type:
-		GameAction.TYPE_PLACE_NODE:
-			return PLACE_NODE_COST
-		GameAction.TYPE_BREAK_NODE:
-			return BREAK_NODE_COST
-		GameAction.TYPE_CLEAR_NODE:
-			return CLEAR_OWN_NODE_COST
-		GameAction.TYPE_SKIP:
-			return SKIP_COST
-		_:
-			return 0
+	return true
 
 
 func action_resource_cost(action_type: String) -> int:
@@ -259,13 +272,6 @@ func action_resource_cost(action_type: String) -> int:
 	return 0
 
 
-func action_target_cost(player: String, action_type: String, cell: Vector2i) -> int:
-	if action_type == GameAction.TYPE_CLEAR_NODE:
-		return clear_node_cost(player, cell)
-
-	return action_cost(action_type)
-
-
 func action_target_resource_cost(_player: String, action_type: String, _cell: Vector2i) -> int:
 	return action_resource_cost(action_type)
 
@@ -274,24 +280,25 @@ func action_uses_resource(action_type: String) -> bool:
 	return action_type == GameAction.TYPE_UPGRADE_HARVESTER or action_type == GameAction.TYPE_UPGRADE_STRIKER
 
 
-func clear_node_cost(player: String, cell: Vector2i) -> int:
-	var object := get_object(cell)
-
-	if object.is_empty() or object.get("owner") == player:
-		return CLEAR_OWN_NODE_COST
-
-	return CLEAR_ENEMY_NODE_COST
+func action_uses_connection_limit(action_type: String) -> bool:
+	return action_type == GameAction.TYPE_PLACE_NODE
 
 
-func action_energy_requirement_message(action_type: String, required_cost: int = -1) -> String:
-	var cost := required_cost
+func action_uses_repair_limit(action_type: String) -> bool:
+	return action_type == GameAction.TYPE_REPAIR_NODE
 
-	if cost < 0:
-		cost = action_cost(action_type)
 
-	return "%s needs %d Energy to %s" % [
+func action_limit_requirement_message(action_type: String) -> String:
+	var limit_label := "action"
+
+	if action_uses_connection_limit(action_type):
+		limit_label = "connection action"
+	elif action_uses_repair_limit(action_type):
+		limit_label = "repair action"
+
+	return "%s needs a %s to %s" % [
 		GameDefs.player_label(current_player),
-		cost,
+		limit_label,
 		_action_verb(action_type),
 	]
 
@@ -437,12 +444,27 @@ func _apply_place_node(action: GameAction) -> Dictionary:
 		return _result(false, status_message, action)
 
 	if not can_afford_action(current_player, action.action_type):
-		status_message = action_energy_requirement_message(action.action_type)
+		status_message = action_limit_requirement_message(action.action_type)
 		return _result(false, status_message, action)
 
-	_spend_energy(current_player, PLACE_NODE_COST)
+	_spend_connection_action()
 	_add_object(action.cell, OBJECT_NODE, current_player)
 	_complete_successful_action(action, "%s placed a node" % GameDefs.player_label(current_player))
+	return _result(true, status_message, action)
+
+
+func _apply_repair_node(action: GameAction) -> Dictionary:
+	if not can_repair_node(action.cell):
+		status_message = "%s cannot repair that node" % GameDefs.player_label(current_player)
+		return _result(false, status_message, action)
+
+	if not can_afford_action(current_player, action.action_type):
+		status_message = action_limit_requirement_message(action.action_type)
+		return _result(false, status_message, action)
+
+	_spend_repair_action()
+	objects[cell_key(action.cell)]["disabled"] = false
+	_complete_successful_action(action, "%s repaired a node" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
 
@@ -462,10 +484,9 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 		return _result(false, status_message, action)
 
 	if not can_afford_action(current_player, action.action_type):
-		status_message = action_energy_requirement_message(action.action_type)
+		status_message = action_limit_requirement_message(action.action_type)
 		return _result(false, status_message, action)
 
-	_spend_energy(current_player, BREAK_NODE_COST)
 	objects[cell_key(action.cell)]["disabled"] = true
 	objects[cell_key(action.cell)]["active"] = false
 	_complete_successful_action(action, "%s disabled an enemy node" % GameDefs.player_label(current_player))
@@ -477,15 +498,12 @@ func _apply_clear_node(action: GameAction) -> Dictionary:
 		status_message = "%s cannot clear that cell" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
-	var clear_cost := clear_node_cost(current_player, action.cell)
-
 	if not can_afford_target_action(current_player, action.action_type, action.cell):
-		status_message = action_energy_requirement_message(action.action_type, clear_cost)
+		status_message = action_limit_requirement_message(action.action_type)
 		return _result(false, status_message, action)
 
 	var object_owner: String = get_object(action.cell).get("owner", "")
 	objects.erase(cell_key(action.cell))
-	_spend_energy(current_player, clear_cost)
 
 	var clear_message := "%s cleared an enemy disabled node" % GameDefs.player_label(current_player)
 
@@ -516,12 +534,18 @@ func _apply_upgrade_node(action: GameAction, role: String) -> Dictionary:
 
 
 func _apply_skip(action: GameAction) -> Dictionary:
-	_grant_energy(current_player, SKIP_ENERGY_GAIN)
-	_complete_successful_action(action, "%s skipped" % GameDefs.player_label(current_player))
+	_complete_turn(action, "%s ended turn" % GameDefs.player_label(current_player))
 	return _result(true, status_message, action)
 
 
 func _complete_successful_action(action: GameAction, message: String) -> void:
+	_record_move(action, message)
+	_update_active_nodes()
+	status_message = message
+	turn_number += 1
+
+
+func _complete_turn(action: GameAction, message: String) -> void:
 	_record_move(action, message)
 	acted_this_round[action.player] = true
 	_end_turn(message)
@@ -536,7 +560,8 @@ func _record_move(action: GameAction, message: String) -> void:
 		"has_cell": action.has_cell,
 		"cell": action.cell,
 		"message": message,
-		"energy_after": energy[action.player],
+		"connection_actions_left": connection_actions_left,
+		"repair_actions_left": repair_actions_left,
 		"round": round_number,
 	})
 
@@ -563,7 +588,7 @@ func _end_turn(message: String) -> void:
 		else:
 			status_message = final_message
 			current_player = GameDefs.other_player(current_player)
-			_grant_energy(current_player, TURN_ENERGY_GAIN)
+			_reset_turn_action_limits()
 
 
 func _round_ready_to_resolve() -> bool:
@@ -896,22 +921,29 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 	objects[cell_key(cell)] = object
 
 
-func _spend_energy(player: String, amount: int) -> void:
-	energy[player] = maxi(0, int(energy.get(player, 0)) - amount)
-
-
 func _spend_resource(player: String, amount: int) -> void:
 	resources[player] = maxi(0, int(resources.get(player, 0)) - amount)
 
 
-func _grant_energy(player: String, amount: int) -> void:
-	energy[player] = mini(MAX_ENERGY, int(energy.get(player, 0)) + amount)
+func _reset_turn_action_limits() -> void:
+	connection_actions_left = CONNECTION_ACTIONS_PER_TURN
+	repair_actions_left = REPAIR_ACTIONS_PER_TURN
+
+
+func _spend_connection_action() -> void:
+	connection_actions_left = maxi(0, connection_actions_left - 1)
+
+
+func _spend_repair_action() -> void:
+	repair_actions_left = maxi(0, repair_actions_left - 1)
 
 
 func _action_verb(action_type: String) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return "place"
+		GameAction.TYPE_REPAIR_NODE:
+			return "repair"
 		GameAction.TYPE_BREAK_NODE:
 			return "break"
 		GameAction.TYPE_CLEAR_NODE:

@@ -2,6 +2,7 @@ class_name GameAction
 extends RefCounted
 
 const TYPE_PLACE_NODE := "place_node"
+const TYPE_REPAIR_NODE := "repair_node"
 const TYPE_BREAK_NODE := "break_node"
 const TYPE_CLEAR_NODE := "clear_node"
 const TYPE_UPGRADE_HARVESTER := "upgrade_harvester"
@@ -30,6 +31,10 @@ func _init(start_action_type: String = "", start_player: String = "", start_cell
 
 static func place_node(action_player: String, action_cell: Vector2i) -> GameAction:
 	return GameAction.new(TYPE_PLACE_NODE, action_player, action_cell, true)
+
+
+static func repair_node(action_player: String, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_REPAIR_NODE, action_player, action_cell, true)
 
 
 static func break_node(action_player: String, action_cell: Vector2i) -> GameAction:
@@ -98,6 +103,7 @@ func is_valid_shape() -> bool:
 
 	return action_type in [
 		TYPE_PLACE_NODE,
+		TYPE_REPAIR_NODE,
 		TYPE_BREAK_NODE,
 		TYPE_CLEAR_NODE,
 		TYPE_UPGRADE_HARVESTER,

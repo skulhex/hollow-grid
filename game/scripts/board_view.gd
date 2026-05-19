@@ -203,10 +203,7 @@ func _cell_to_screen(cell: Vector2i) -> Vector2:
 
 
 func _target_color() -> Color:
-	if selected_action_type == GameAction.TYPE_BREAK_NODE:
-		return Color(1.0, 0.62, 0.22)
-
-	if selected_action_type == GameAction.TYPE_CLEAR_NODE:
+	if selected_action_type == GameAction.TYPE_REPAIR_NODE:
 		return Color(0.48, 0.78, 0.38)
 
 	if selected_action_type == GameAction.TYPE_UPGRADE_HARVESTER:

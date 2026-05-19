@@ -49,9 +49,9 @@ text = "Player 1"
 layout_mode = 2
 text = "Core HP: P1 5 / P2 5"
 
-[node name="EnergyLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="ActionLimitLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
-text = "Energy: P1 2 / P2 1"
+text = "Actions: Connect 1 / Repair 1"
 
 [node name="ResourceLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
 layout_mode = 2
@@ -101,7 +101,7 @@ custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Place Node (1E)"
+text = "Place Node"
 
 [node name="PlaceKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow"]
 custom_minimum_size = Vector2(44, 42)
@@ -110,18 +110,18 @@ text = "1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="BreakRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="RepairRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="BreakButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/BreakRow"]
+[node name="RepairButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/RepairRow"]
 custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Break Node (2E)"
+text = "Repair Node"
 
-[node name="BreakKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/BreakRow"]
+[node name="RepairKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/RepairRow"]
 custom_minimum_size = Vector2(44, 42)
 layout_mode = 2
 text = "2"
@@ -129,6 +129,7 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="ClearRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -137,7 +138,7 @@ custom_minimum_size = Vector2(230, 42)
 layout_mode = 2
 focus_mode = 0
 toggle_mode = true
-text = "Clear Node (0/1E)"
+text = "Clear Node"
 
 [node name="ClearKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ClearRow"]
 custom_minimum_size = Vector2(44, 42)
@@ -160,7 +161,7 @@ text = "Upgrade Harvester (1R)"
 [node name="HarvesterKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow"]
 custom_minimum_size = Vector2(44, 42)
 layout_mode = 2
-text = "4"
+text = "3"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -178,7 +179,7 @@ text = "Upgrade Striker (1R)"
 [node name="StrikerKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow"]
 custom_minimum_size = Vector2(44, 42)
 layout_mode = 2
-text = "5"
+text = "4"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -193,7 +194,7 @@ theme_override_constants/separation = 8
 custom_minimum_size = Vector2(230, 50)
 layout_mode = 2
 focus_mode = 0
-text = "Pass Turn (+1E)"
+text = "End Turn"
 
 [node name="SkipKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow"]
 custom_minimum_size = Vector2(44, 50)
