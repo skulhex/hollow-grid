@@ -57,7 +57,7 @@ func _ready() -> void:
 	clear_row.visible = false
 
 
-func refresh(match_state: MatchState, selected_action_type: String) -> void:
+func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE) -> void:
 	turn_label.text = GameDefs.player_label(match_state.current_player)
 	turn_label.add_theme_color_override("font_color", GameDefs.player_color(match_state.current_player))
 
@@ -74,7 +74,7 @@ func refresh(match_state: MatchState, selected_action_type: String) -> void:
 		match_state.resources[GameDefs.PLAYER_TWO],
 	]
 	upkeep_label.text = match_state.upkeep_message
-	selected_label.text = "Mode: %s" % _action_label(selected_action_type)
+	selected_label.text = "Mode: %s" % _action_label(selected_action_type, striker_attack_source)
 	status_label.text = match_state.status_message
 
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
@@ -240,6 +240,10 @@ func _format_history_entry(entry: Dictionary) -> String:
 		var cell: Vector2i = entry.get("cell", Vector2i.ZERO)
 		text += " (%d, %d)" % [cell.x, cell.y]
 
+	if bool(entry.get("has_source_cell", false)):
+		var source_cell: Vector2i = entry.get("source_cell", Vector2i.ZERO)
+		text += " from (%d, %d)" % [source_cell.x, source_cell.y]
+
 	return text
 
 
@@ -253,6 +257,8 @@ func _short_action_label(action_type: String) -> String:
 			return "Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Striker"
+		GameAction.TYPE_STRIKER_ATTACK:
+			return "Strike"
 		GameAction.TYPE_SKIP:
 			return "End"
 		_:
@@ -293,7 +299,7 @@ func _on_restart_pressed() -> void:
 	restart_requested.emit()
 
 
-func _action_label(action_type: String) -> String:
+func _action_label(action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return "Place Node"
@@ -303,5 +309,10 @@ func _action_label(action_type: String) -> String:
 			return "Upgrade Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Upgrade Striker"
+		GameAction.TYPE_STRIKER_ATTACK:
+			if striker_attack_source != BoardView.HOVER_NONE:
+				return "Striker Attack (%d, %d)" % [striker_attack_source.x, striker_attack_source.y]
+
+			return "Striker Attack"
 		_:
 			return action_type

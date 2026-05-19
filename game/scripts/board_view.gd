@@ -7,6 +7,7 @@ var grid: HexGrid
 var match_state: MatchState
 var hover_cell := HOVER_NONE
 var selected_action_type := GameAction.TYPE_PLACE_NODE
+var striker_attack_source := HOVER_NONE
 
 
 func _ready() -> void:
@@ -26,6 +27,14 @@ func set_selected_action_type(action_type: String) -> void:
 		return
 
 	selected_action_type = action_type
+	queue_redraw()
+
+
+func set_striker_attack_source(cell: Vector2i) -> void:
+	if cell == striker_attack_source:
+		return
+
+	striker_attack_source = cell
 	queue_redraw()
 
 
@@ -67,7 +76,7 @@ func _draw_cells() -> void:
 			fill = control_color.darkened(0.62)
 			outline = control_color
 
-		var is_valid_target := match_state.can_target_action(selected_action_type, cell)
+		var is_valid_target := _is_valid_target(cell)
 
 		if is_valid_target:
 			var target_color := _target_color()
@@ -170,10 +179,17 @@ func _draw_objects() -> void:
 				_draw_disabled_overlay(center, GameDefs.player_color(object_owner))
 			else:
 				draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
-				_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), bool(object.get("active", false)))
+				var role_ready := bool(object.get("active", false)) and bool(object.get("ready", false))
+				_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), role_ready)
 
-		if match_state.can_target_action(selected_action_type, cell):
+				if _is_ready_striker(object):
+					draw_arc(center, 21.5, 0.0, TAU, 48, _warning_color().lightened(0.12), 2.2, true)
+
+		if _is_valid_target(cell):
 			draw_arc(center, 25.0, 0.0, TAU, 48, _target_color().lightened(0.18), 3.0, true)
+
+		if _is_selected_striker_source(cell):
+			draw_arc(center, 30.0, 0.0, TAU, 48, _warning_color().lightened(0.18), 3.2, true)
 
 
 func _draw_hex(center: Vector2, radius: float, fill: Color, outline: Color, width: float) -> void:
@@ -195,6 +211,9 @@ func _cell_to_screen(cell: Vector2i) -> Vector2:
 
 
 func _target_color() -> Color:
+	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
+		return _warning_color()
+
 	if selected_action_type == GameAction.TYPE_REPAIR_NODE:
 		return Color(0.48, 0.78, 0.38)
 
@@ -248,3 +267,33 @@ func _resource_color() -> Color:
 
 func _warning_color() -> Color:
 	return Color(1.0, 0.72, 0.24)
+
+
+func _is_valid_target(cell: Vector2i) -> bool:
+	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
+		return striker_attack_source != HOVER_NONE and match_state.can_striker_attack(striker_attack_source, cell)
+
+	return match_state.can_target_action(selected_action_type, cell)
+
+
+func _is_selected_striker_source(cell: Vector2i) -> bool:
+	return selected_action_type == GameAction.TYPE_STRIKER_ATTACK and cell == striker_attack_source
+
+
+func _is_ready_striker(object: Dictionary) -> bool:
+	if object.get("type") != MatchState.OBJECT_NODE:
+		return false
+
+	if object.get("role", MatchState.NODE_CONDUIT) != MatchState.NODE_STRIKER:
+		return false
+
+	if object.get("disabled", false):
+		return false
+
+	if not object.get("active", false):
+		return false
+
+	if not object.get("ready", false):
+		return false
+
+	return int(object.get("action_charges", 0)) > 0

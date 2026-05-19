@@ -18,6 +18,7 @@ const NODE_ROLE_ACTION_CHARGES_PER_TURN := 1
 const HARVESTER_RESOURCE_GAIN := 1
 const HARVESTER_UPGRADE_RESOURCE_COST := 1
 const STRIKER_UPGRADE_RESOURCE_COST := 1
+const STRIKER_CORE_DAMAGE := 1
 
 var board_radius: int
 var objects: Dictionary = {}
@@ -100,6 +101,8 @@ func apply_action(raw_action: Variant) -> Dictionary:
 			return _apply_upgrade_node(action, NODE_HARVESTER)
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return _apply_upgrade_node(action, NODE_STRIKER)
+		GameAction.TYPE_STRIKER_ATTACK:
+			return _apply_striker_attack(action)
 		GameAction.TYPE_SKIP:
 			return _apply_skip(action)
 		_:
@@ -129,6 +132,10 @@ func upgrade_harvester(cell: Vector2i) -> Dictionary:
 
 func upgrade_striker(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.upgrade_striker(current_player, cell))
+
+
+func striker_attack(source_cell: Vector2i, cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.striker_attack(current_player, source_cell, cell))
 
 
 func skip_turn() -> Dictionary:
@@ -210,6 +217,18 @@ func can_clear_node(cell: Vector2i) -> bool:
 
 func can_upgrade_node(cell: Vector2i) -> bool:
 	return _can_upgrade_node(current_player, cell)
+
+
+func can_select_striker_source(cell: Vector2i) -> bool:
+	return _can_select_striker_source(current_player, cell)
+
+
+func striker_source_status_message(cell: Vector2i) -> String:
+	return _striker_source_status_message(current_player, cell)
+
+
+func can_striker_attack(source_cell: Vector2i, target_cell: Vector2i) -> bool:
+	return _can_striker_attack(current_player, source_cell, target_cell)
 
 
 func can_target_action(action_type: String, cell: Vector2i) -> bool:
@@ -485,12 +504,40 @@ func _apply_upgrade_node(action: GameAction, role: String) -> Dictionary:
 
 	_spend_resource(current_player, action_resource_cost(action.action_type))
 	objects[cell_key(action.cell)]["role"] = role
-	objects[cell_key(action.cell)]["action_charges"] = NODE_ROLE_ACTION_CHARGES_PER_TURN
+	objects[cell_key(action.cell)]["ready"] = false
+	objects[cell_key(action.cell)]["action_charges"] = 0
 	_complete_successful_action(action, "%s upgraded a %s" % [
 		GameDefs.player_label(current_player),
 		_node_role_label(role),
 	])
 	return _result(true, status_message, action)
+
+
+func _apply_striker_attack(action: GameAction) -> Dictionary:
+	if not _can_striker_attack(current_player, action.source_cell, action.cell):
+		status_message = _striker_attack_status_message(current_player, action.source_cell, action.cell)
+		return _result(false, status_message, action)
+
+	var target := get_object(action.cell)
+	var target_type: String = target.get("type", "")
+
+	if target_type == OBJECT_NODE:
+		objects[cell_key(action.cell)]["disabled"] = true
+		objects[cell_key(action.cell)]["active"] = false
+		objects[cell_key(action.source_cell)]["action_charges"] = 0
+		_complete_successful_action(action, "%s Striker disabled an enemy node" % GameDefs.player_label(current_player))
+		return _result(true, status_message, action)
+
+	if target_type == OBJECT_CORE:
+		var target_owner: String = target.get("owner", "")
+		core_hp[target_owner] = maxi(0, int(core_hp.get(target_owner, 0)) - STRIKER_CORE_DAMAGE)
+		objects[cell_key(action.source_cell)]["action_charges"] = 0
+		_complete_successful_action(action, "%s Striker hit the enemy Core" % GameDefs.player_label(current_player))
+		_check_finished_after_action(status_message)
+		return _result(true, status_message, action)
+
+	status_message = "%s cannot strike that target" % GameDefs.player_label(current_player)
+	return _result(false, status_message, action)
 
 
 func _apply_skip(action: GameAction) -> Dictionary:
@@ -503,6 +550,19 @@ func _complete_successful_action(action: GameAction, message: String) -> void:
 	_update_active_nodes()
 	status_message = message
 	turn_number += 1
+
+
+func _check_finished_after_action(message: String) -> void:
+	if _is_draw():
+		finished = true
+		status_message = "%s. Draw: both Cores destroyed" % message
+		return
+
+	var winner := _winner()
+
+	if not winner.is_empty():
+		finished = true
+		status_message = "%s. %s wins" % [message, GameDefs.player_label(winner)]
 
 
 func _complete_turn(action: GameAction, message: String) -> void:
@@ -519,6 +579,8 @@ func _record_move(action: GameAction, message: String) -> void:
 		"type": action.action_type,
 		"has_cell": action.has_cell,
 		"cell": action.cell,
+		"has_source_cell": action.has_source_cell,
+		"source_cell": action.source_cell,
 		"message": message,
 		"connection_actions_left": connection_actions_left,
 		"repair_actions_left": repair_actions_left,
@@ -644,6 +706,119 @@ func _can_upgrade_node(player: String, cell: Vector2i) -> bool:
 	return object.get("role", NODE_CONDUIT) == NODE_CONDUIT
 
 
+func _can_select_striker_source(player: String, cell: Vector2i) -> bool:
+	if not contains_cell(cell):
+		return false
+
+	var object := get_object(cell)
+
+	if object.is_empty():
+		return false
+
+	if object.get("type") != OBJECT_NODE:
+		return false
+
+	if object.get("owner") != player:
+		return false
+
+	if object.get("role", NODE_CONDUIT) != NODE_STRIKER:
+		return false
+
+	if object.get("disabled", false):
+		return false
+
+	if not object.get("active", false):
+		return false
+
+	if not object.get("ready", false):
+		return false
+
+	return int(object.get("action_charges", 0)) > 0
+
+
+func _striker_source_status_message(player: String, cell: Vector2i) -> String:
+	var object := get_object(cell)
+
+	if object.is_empty() or object.get("type") != OBJECT_NODE or object.get("owner") != player or object.get("role", NODE_CONDUIT) != NODE_STRIKER:
+		return "Select your ready Striker to attack"
+
+	if object.get("disabled", false):
+		return "%s Striker is disabled" % GameDefs.player_label(player)
+
+	if not object.get("active", false):
+		return "%s Striker is inactive" % GameDefs.player_label(player)
+
+	if not object.get("ready", false):
+		return "%s Striker is not ready" % GameDefs.player_label(player)
+
+	if int(object.get("action_charges", 0)) <= 0:
+		return "%s Striker has no charge" % GameDefs.player_label(player)
+
+	return "%s Striker ready" % GameDefs.player_label(player)
+
+
+func _can_striker_attack(player: String, source_cell: Vector2i, target_cell: Vector2i) -> bool:
+	if not _can_select_striker_source(player, source_cell):
+		return false
+
+	if not contains_cell(target_cell):
+		return false
+
+	if source_cell == target_cell:
+		return false
+
+	if not _are_neighbors(source_cell, target_cell):
+		return false
+
+	var target := get_object(target_cell)
+
+	if target.is_empty():
+		return false
+
+	if target.get("owner") == player:
+		return false
+
+	match str(target.get("type", "")):
+		OBJECT_NODE:
+			return not target.get("disabled", false)
+		OBJECT_CORE:
+			return true
+		_:
+			return false
+
+
+func _striker_attack_status_message(player: String, source_cell: Vector2i, target_cell: Vector2i) -> String:
+	if not _can_select_striker_source(player, source_cell):
+		return _striker_source_status_message(player, source_cell)
+
+	if not contains_cell(target_cell):
+		return "%s Striker target is outside the board" % GameDefs.player_label(player)
+
+	if not _are_neighbors(source_cell, target_cell):
+		return "%s Striker can only hit adjacent targets" % GameDefs.player_label(player)
+
+	var target := get_object(target_cell)
+
+	if target.is_empty():
+		return "%s Striker needs an enemy target" % GameDefs.player_label(player)
+
+	if target.get("owner") == player:
+		return "%s Striker cannot target friendly objects" % GameDefs.player_label(player)
+
+	if target.get("type") == OBJECT_NODE and target.get("disabled", false):
+		return "%s Striker target is already disabled" % GameDefs.player_label(player)
+
+	return "%s cannot strike that target" % GameDefs.player_label(player)
+
+
+func _are_neighbors(first_cell: Vector2i, second_cell: Vector2i) -> bool:
+	for direction in HexGrid.DIRECTIONS:
+		if first_cell + direction == second_cell:
+			return true
+
+	return false
+
+
 func _harvester_resource_gain(player: String) -> int:
 	var gain := 0
 
@@ -665,6 +840,9 @@ func _harvester_resource_gain(player: String) -> int:
 		if object.get("disabled", false):
 			continue
 
+		if not object.get("ready", false):
+			continue
+
 		if object.get("active", false):
 			gain += HARVESTER_RESOURCE_GAIN
 
@@ -682,6 +860,7 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 
 	if type == OBJECT_NODE:
 		object["role"] = NODE_CONDUIT
+		object["ready"] = false
 		object["action_charges"] = 0
 
 	objects[cell_key(cell)] = object
@@ -691,12 +870,12 @@ func _start_turn_for_player(player: String) -> void:
 	_update_active_nodes()
 	_reset_turn_action_limits()
 
+	var charged_nodes := _reset_role_node_action_charges(player)
 	var resource_gain := _harvester_resource_gain(player)
 
 	if resource_gain > 0:
 		resources[player] += resource_gain
 
-	var charged_nodes := _reset_role_node_action_charges(player)
 	upkeep_message = _format_upkeep_message(player, resource_gain, charged_nodes)
 
 
@@ -713,10 +892,18 @@ func _reset_role_node_action_charges(player: String) -> int:
 			continue
 
 		if object.get("role", NODE_CONDUIT) == NODE_CONDUIT:
+			object["ready"] = false
 			object["action_charges"] = 0
 			objects[key] = object
 			continue
 
+		if object.get("disabled", false):
+			object["ready"] = false
+			object["action_charges"] = 0
+			objects[key] = object
+			continue
+
+		object["ready"] = true
 		object["action_charges"] = NODE_ROLE_ACTION_CHARGES_PER_TURN
 		objects[key] = object
 		charged_nodes += 1
@@ -776,6 +963,8 @@ func _action_verb(action_type: String) -> String:
 			return "upgrade a Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "upgrade a Striker"
+		GameAction.TYPE_STRIKER_ATTACK:
+			return "strike"
 		GameAction.TYPE_SKIP:
 			return "skip"
 		_:

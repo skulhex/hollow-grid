@@ -29,7 +29,7 @@ Hollow Grid — абстрактная пошаговая multiplayer strategy g
 - Новые `Node` создаются как `Conduit`.
 - `Conduit` проводит активную сеть и даёт influence на `control point`, но не даёт `Resource` и не наносит урон `Core`.
 - `Harvester` — улучшенный свой активный `Conduit`. Он проводит сеть, даёт influence и может приносить `Resource`.
-- `Striker` — улучшенный свой активный `Conduit`. Он проводит сеть, даёт influence и будет использоваться для атак после отдельного уточнения attack-правил.
+- `Striker` — улучшенный свой активный `Conduit`. Он проводит сеть, даёт influence и может вручную атаковать соседние вражеские цели.
 - Центральная клетка — `control point`; на неё нельзя ставить `Node`.
 
 ## Правила MVP
@@ -56,22 +56,26 @@ Hollow Grid — абстрактная пошаговая multiplayer strategy g
   - `connection_actions_left = 1`;
   - `repair_actions_left = 1`.
 - В начале своего хода все role-`Node` игрока восстанавливают `action_charges = 1`.
+- Новый только что улучшенный role-`Node` получает `ready = false` и не применяет эффекты до следующего хода владельца.
 - За ход можно выполнить несколько действий, пока хватает соответствующих лимитов и `Resource`.
 - Доступные действия:
   - `place_node` — поставить свой `Node`;
   - `repair_node` — восстановить свой отключённый `Node`;
   - `upgrade_harvester` — улучшить свой активный `Conduit` в `Harvester`;
   - `upgrade_striker` — улучшить свой активный `Conduit` в `Striker`;
+  - `striker_attack` — атаковать соседнюю вражескую цель готовым `Striker`;
   - `skip` — завершить ход.
 - `place_node` тратит `1 connection action`.
 - `repair_node` тратит `1 repair action`, доступен только для своего отключённого `Node` и не требует активного соседа.
 - `upgrade_harvester` стоит `1 Resource`, не тратит лимиты действий и доступен только для своего активного `Conduit`.
 - `upgrade_striker` стоит `1 Resource`, не тратит лимиты действий и доступен только для своего активного `Conduit`.
+- `striker_attack` тратит `1 action_charges` конкретного `Striker`, доступен только для своего активного, готового и не отключённого `Striker`.
 - `break_node` и `clear_node` будут уточнены отдельно и пока не входят в player-facing набор команд.
 - Ход передаётся как единая `Action`-модель, пригодная для отправки на сервер:
-  - `type` — одно из `place_node`, `repair_node`, `upgrade_harvester`, `upgrade_striker`, `skip`;
+  - `type` — одно из `place_node`, `repair_node`, `upgrade_harvester`, `upgrade_striker`, `striker_attack`, `skip`;
   - `player` — игрок, который отправляет действие;
   - `cell` — целевая клетка в axial-координатах `{ q, r }`; обязательна для действий с клеткой, отсутствует для `skip`.
+- Для `striker_attack` дополнительно передаётся `source_cell` — клетка атакующего `Striker`.
 - Пример payload: `{ "type": "place_node", "player": "player_1", "cell": { "q": -2, "r": 0 } }`.
 
 ## Ход и upkeep
@@ -86,18 +90,21 @@ Hollow Grid — абстрактная пошаговая multiplayer strategy g
 
 - пересчитать активную сеть;
 - восстановить `connection_actions_left` и `repair_actions_left`;
+- перевести role-`Node` активного игрока в `ready` и восстановить их `action_charges`;
 - начислить `Resource` активному игроку за каждый активный `Harvester` рядом с `control point`;
-- восстановить `action_charges` role-`Node` активного игрока.
 
 ## Resource от Harvester
 
 - `Resource` начисляется в start-of-turn upkeep активного игрока.
-- Каждый активный `Harvester` активного игрока рядом с `control point` даёт `+1 Resource`.
+- Каждый активный, готовый `Harvester` активного игрока рядом с `control point` даёт `+1 Resource`.
 - Несколько `Harvester` одного игрока рядом с `control point` складываются.
 
-## Урон по Core
+## Атака Striker
 
-- Attack-правила для `Striker` будут уточнены отдельно.
+- Игрок выбирает свой готовый активный `Striker`, затем соседнюю вражескую цель.
+- Вражеский `Node` от атаки становится отключённым.
+- Вражеский `Core` получает `1 HP` урона.
+- После атаки `Striker` тратит заряд до следующего хода владельца.
 - `Conduit` и `Harvester` не наносят урон `Core`.
 
 ## Визуальный стиль
@@ -123,10 +130,8 @@ Hollow Grid — абстрактная пошаговая multiplayer strategy g
 - рейтинг;
 - чат;
 - разные карты;
-- ручные способности `Node`;
 - `Defender` и `Hacker`;
 - модули и здания;
-- финальные attack-правила;
 - случайные события;
 - туман войны;
 - сложные анимации;

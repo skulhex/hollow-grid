@@ -7,11 +7,13 @@ const TYPE_BREAK_NODE := "break_node"
 const TYPE_CLEAR_NODE := "clear_node"
 const TYPE_UPGRADE_HARVESTER := "upgrade_harvester"
 const TYPE_UPGRADE_STRIKER := "upgrade_striker"
+const TYPE_STRIKER_ATTACK := "striker_attack"
 const TYPE_SKIP := "skip"
 
 const KEY_TYPE := "type"
 const KEY_PLAYER := "player"
 const KEY_CELL := "cell"
+const KEY_SOURCE_CELL := "source_cell"
 const KEY_CELL_Q := "q"
 const KEY_CELL_R := "r"
 
@@ -19,14 +21,18 @@ var action_type := ""
 var player := ""
 var cell := Vector2i.ZERO
 var has_cell := false
+var source_cell := Vector2i.ZERO
+var has_source_cell := false
 var invalid_shape := false
 
 
-func _init(start_action_type: String = "", start_player: String = "", start_cell: Vector2i = Vector2i.ZERO, start_has_cell: bool = false) -> void:
+func _init(start_action_type: String = "", start_player: String = "", start_cell: Vector2i = Vector2i.ZERO, start_has_cell: bool = false, start_source_cell: Vector2i = Vector2i.ZERO, start_has_source_cell: bool = false) -> void:
 	action_type = start_action_type
 	player = start_player
 	cell = start_cell
 	has_cell = start_has_cell
+	source_cell = start_source_cell
+	has_source_cell = start_has_source_cell
 
 
 static func place_node(action_player: String, action_cell: Vector2i) -> GameAction:
@@ -53,6 +59,10 @@ static func upgrade_striker(action_player: String, action_cell: Vector2i) -> Gam
 	return GameAction.new(TYPE_UPGRADE_STRIKER, action_player, action_cell, true)
 
 
+static func striker_attack(action_player: String, action_source_cell: Vector2i, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_STRIKER_ATTACK, action_player, action_cell, true, action_source_cell, true)
+
+
 static func skip(action_player: String) -> GameAction:
 	return GameAction.new(TYPE_SKIP, action_player)
 
@@ -73,6 +83,16 @@ static func from_payload(payload: Dictionary) -> GameAction:
 		parsed_action.cell = _parse_cell(raw_cell)
 		parsed_action.has_cell = true
 
+	if payload.has(KEY_SOURCE_CELL):
+		var raw_source_cell: Variant = payload[KEY_SOURCE_CELL]
+
+		if not _is_valid_cell_payload(raw_source_cell):
+			parsed_action.invalid_shape = true
+			return parsed_action
+
+		parsed_action.source_cell = _parse_cell(raw_source_cell)
+		parsed_action.has_source_cell = true
+
 	return parsed_action
 
 
@@ -88,6 +108,12 @@ func to_payload() -> Dictionary:
 			KEY_CELL_R: cell.y,
 		}
 
+	if has_source_cell:
+		payload[KEY_SOURCE_CELL] = {
+			KEY_CELL_Q: source_cell.x,
+			KEY_CELL_R: source_cell.y,
+		}
+
 	return payload
 
 
@@ -99,7 +125,10 @@ func is_valid_shape() -> bool:
 		return false
 
 	if action_type == TYPE_SKIP:
-		return not has_cell
+		return not has_cell and not has_source_cell
+
+	if action_type == TYPE_STRIKER_ATTACK:
+		return has_cell and has_source_cell
 
 	return action_type in [
 		TYPE_PLACE_NODE,
@@ -108,7 +137,7 @@ func is_valid_shape() -> bool:
 		TYPE_CLEAR_NODE,
 		TYPE_UPGRADE_HARVESTER,
 		TYPE_UPGRADE_STRIKER,
-	] and has_cell
+	] and has_cell and not has_source_cell
 
 
 static func _parse_cell(raw_cell: Variant) -> Vector2i:
