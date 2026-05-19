@@ -3,15 +3,28 @@ extends Node2D
 const BOARD_RADIUS := 3
 const HEX_SIZE := 52.0
 const DEFAULT_ACTION_TYPE := GameAction.TYPE_PLACE_NODE
+const MODE_LOCAL := "local"
+const MODE_ONLINE := "online"
+const DEFAULT_SERVER_URL := "ws://127.0.0.1:8787"
+const NetworkClientScript := preload("res://scripts/network_client.gd")
 
 @onready var board_view: BoardView = $BoardView
 @onready var hud: GameHud = $HUD
 
 var grid: HexGrid
 var match_state: MatchState
+var network_client: RefCounted = NetworkClientScript.new()
 var selected_action_type := DEFAULT_ACTION_TYPE
 var selected_striker_source := BoardView.HOVER_NONE
 var selected_hacker_source := BoardView.HOVER_NONE
+var mode := MODE_LOCAL
+var assigned_player := ""
+var online_room_code := ""
+var online_players: Array[String] = []
+var network_status := "Local sandbox"
+var pending_room_request := ""
+var pending_join_room_code := ""
+var pending_action: Dictionary = {}
 
 
 func _ready() -> void:
@@ -23,12 +36,20 @@ func _ready() -> void:
 	hud.module_kind_selected.connect(_submit_module_kind)
 	hud.skip_requested.connect(_skip_turn)
 	hud.restart_requested.connect(_restart_match)
+	hud.online_create_requested.connect(_create_online_room)
+	hud.online_join_requested.connect(_join_online_room)
+	hud.online_leave_requested.connect(_leave_online_room)
+	_connect_network_client_signals()
 
 	board_view.setup(grid, match_state)
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
 	board_view.set_hacker_hack_source(selected_hacker_source)
 	_refresh()
+
+
+func _process(_delta: float) -> void:
+	network_client.poll()
 
 
 func _input(event: InputEvent) -> void:
@@ -47,6 +68,9 @@ func _handle_click(event: InputEventMouseButton) -> void:
 	if match_state.finished:
 		return
 
+	if hud.is_text_input_focused():
+		hud.release_text_input_focus()
+
 	var cell := board_view.screen_to_cell(event.position)
 
 	if not grid.contains(cell):
@@ -59,6 +83,9 @@ func _handle_click(event: InputEventMouseButton) -> void:
 
 
 func _handle_key(event: InputEventKey) -> void:
+	if hud.is_text_input_focused():
+		return
+
 	match event.keycode:
 		KEY_1:
 			_select_action(GameAction.TYPE_PLACE_NODE)
@@ -75,6 +102,9 @@ func _handle_key(event: InputEventKey) -> void:
 
 
 func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
+	if not _can_submit_gameplay_action():
+		return _blocked_action_result()
+
 	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
 		return _submit_striker_attack_target(cell)
 
@@ -182,6 +212,9 @@ func _submit_hacker_hack_target(cell: Vector2i) -> Dictionary:
 
 
 func _submit_action(action: GameAction) -> Dictionary:
+	if mode == MODE_ONLINE:
+		return _submit_online_action(action)
+
 	var result := match_state.apply_action(action.to_payload())
 	_refresh()
 	return result
@@ -229,12 +262,21 @@ func _skip_turn() -> void:
 	if match_state.finished:
 		return
 
+	if not _can_submit_gameplay_action():
+		_blocked_action_result()
+		return
+
 	_clear_striker_attack_mode(false)
 	_clear_hacker_hack_mode(false)
 	_submit_action(GameAction.skip(match_state.current_player))
 
 
 func _restart_match() -> void:
+	if mode == MODE_ONLINE:
+		match_state.status_message = "Restart is local-only in online mode"
+		_refresh()
+		return
+
 	match_state.setup_match()
 	selected_action_type = DEFAULT_ACTION_TYPE
 	selected_striker_source = BoardView.HOVER_NONE
@@ -264,7 +306,264 @@ func _refresh() -> void:
 	board_view.set_striker_attack_source(selected_striker_source)
 	board_view.set_hacker_hack_source(selected_hacker_source)
 	board_view.queue_redraw()
-	hud.refresh(match_state, selected_action_type, selected_striker_source, selected_hacker_source, board_view.hover_cell)
+	hud.refresh(match_state, selected_action_type, selected_striker_source, selected_hacker_source, board_view.hover_cell, _network_hud_state())
+
+
+func _connect_network_client_signals() -> void:
+	network_client.connected.connect(_on_network_connected)
+	network_client.disconnected.connect(_on_network_disconnected)
+	network_client.room_created.connect(_on_room_created)
+	network_client.joined.connect(_on_room_joined)
+	network_client.player_joined.connect(_on_player_joined)
+	network_client.snapshot_received.connect(_on_snapshot_received)
+	network_client.error_received.connect(_on_network_error)
+	network_client.connection_status_changed.connect(_on_connection_status_changed)
+
+
+func _create_online_room() -> void:
+	if not _can_start_room_request():
+		_refresh()
+		return
+
+	mode = MODE_ONLINE
+	assigned_player = ""
+	online_room_code = ""
+	online_players.clear()
+	pending_action.clear()
+	pending_room_request = "create"
+	pending_join_room_code = ""
+	network_status = "Connecting"
+	match_state.status_message = "Connecting to server"
+	var error: int = network_client.connect_to_server(DEFAULT_SERVER_URL)
+	if error != OK:
+		pending_room_request = ""
+		match_state.status_message = "Connect failed: %s" % error_string(error)
+	_refresh()
+
+
+func _join_online_room(room_code: String) -> void:
+	if not _can_start_room_request():
+		_refresh()
+		return
+
+	var normalized_room_code := room_code.strip_edges().to_upper()
+	if normalized_room_code.is_empty():
+		match_state.status_message = "Room code is required"
+		_refresh()
+		return
+
+	mode = MODE_ONLINE
+	assigned_player = ""
+	online_room_code = normalized_room_code
+	online_players.clear()
+	pending_action.clear()
+	pending_room_request = "join"
+	pending_join_room_code = online_room_code
+	network_status = "Connecting"
+	match_state.status_message = "Connecting to server"
+	var error: int = network_client.connect_to_server(DEFAULT_SERVER_URL)
+	if error != OK:
+		pending_room_request = ""
+		match_state.status_message = "Connect failed: %s" % error_string(error)
+	_refresh()
+
+
+func _on_network_connected() -> void:
+	if pending_room_request == "create":
+		var error: int = network_client.create_room()
+		if error != OK:
+			pending_room_request = ""
+			match_state.status_message = "Create room failed: %s" % error_string(error)
+	elif pending_room_request == "join":
+		var error: int = network_client.join_room(pending_join_room_code)
+		if error != OK:
+			pending_room_request = ""
+			match_state.status_message = "Join room failed: %s" % error_string(error)
+
+	_refresh()
+
+
+func _on_network_disconnected() -> void:
+	network_status = "Disconnected"
+	online_players.clear()
+	pending_action.clear()
+	pending_room_request = ""
+	match_state.status_message = "Disconnected from server"
+	_refresh()
+
+
+func _on_room_created(room_code: String, player: String, snapshot: Dictionary) -> void:
+	pending_room_request = ""
+	online_room_code = room_code
+	assigned_player = player
+	online_players.assign([player])
+	network_status = "Room %s as %s" % [online_room_code, GameDefs.player_label(assigned_player)]
+	_apply_server_snapshot(snapshot)
+
+
+func _on_room_joined(room_code: String, player: String, snapshot: Dictionary) -> void:
+	pending_room_request = ""
+	online_room_code = room_code
+	assigned_player = player
+	online_players.assign([GameDefs.PLAYER_ONE, player])
+	network_status = "Room %s as %s" % [online_room_code, GameDefs.player_label(assigned_player)]
+	_apply_server_snapshot(snapshot)
+
+
+func _on_player_joined(players: Array, snapshot: Dictionary) -> void:
+	online_players.clear()
+	for player in players:
+		online_players.append(str(player))
+
+	network_status = "Room %s ready" % online_room_code
+	_apply_server_snapshot(snapshot)
+
+
+func _on_snapshot_received(snapshot: Dictionary) -> void:
+	_apply_server_snapshot(snapshot)
+
+
+func _on_network_error(message: String) -> void:
+	pending_action.clear()
+	pending_room_request = ""
+	match_state.status_message = message
+	_refresh()
+
+
+func _on_connection_status_changed(status_text: String) -> void:
+	if assigned_player.is_empty():
+		network_status = status_text
+	else:
+		network_status = "%s - %s" % [status_text, GameDefs.player_label(assigned_player)]
+
+	_refresh()
+
+
+func _leave_online_room() -> void:
+	network_client.disconnect_from_server()
+	mode = MODE_LOCAL
+	assigned_player = ""
+	online_room_code = ""
+	online_players.clear()
+	pending_action.clear()
+	pending_room_request = ""
+	pending_join_room_code = ""
+	network_status = "Local sandbox"
+	match_state.setup_match()
+	selected_action_type = DEFAULT_ACTION_TYPE
+	selected_striker_source = BoardView.HOVER_NONE
+	selected_hacker_source = BoardView.HOVER_NONE
+	board_view.set_selected_action_type(selected_action_type)
+	board_view.set_striker_attack_source(selected_striker_source)
+	board_view.set_hacker_hack_source(selected_hacker_source)
+	board_view.set_hover_cell(BoardView.HOVER_NONE)
+	hud.clear_room_code_input()
+	_refresh()
+
+
+func _can_start_room_request() -> bool:
+	if pending_room_request != "":
+		match_state.status_message = "Network request is already in progress"
+		return false
+
+	if mode == MODE_ONLINE and not assigned_player.is_empty():
+		match_state.status_message = "Leave the current room first"
+		return false
+
+	return true
+
+
+func _submit_online_action(action: GameAction) -> Dictionary:
+	if not _can_submit_gameplay_action():
+		return _blocked_action_result()
+
+	var payload := action.to_payload()
+	payload[GameAction.KEY_PLAYER] = assigned_player
+	var error: int = network_client.send_action(payload)
+	if error != OK:
+		match_state.status_message = "Send action failed: %s" % error_string(error)
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	pending_action = payload
+	match_state.status_message = "Waiting for server snapshot"
+	_refresh()
+	return {
+		"ok": true,
+		"message": match_state.status_message,
+		"action": payload,
+	}
+
+
+func _apply_server_snapshot(snapshot: Dictionary) -> void:
+	var completed_action := pending_action.duplicate()
+	pending_action.clear()
+	match_state.load_snapshot(snapshot)
+
+	if not completed_action.is_empty():
+		var completed_type := str(completed_action.get(GameAction.KEY_TYPE, ""))
+		if completed_type == GameAction.TYPE_STRIKER_ATTACK:
+			_clear_striker_attack_mode(true)
+		elif completed_type == GameAction.TYPE_HACKER_HACK:
+			_clear_hacker_hack_mode(true)
+
+	_refresh()
+
+
+func _can_submit_gameplay_action() -> bool:
+	if match_state.finished:
+		return false
+
+	if mode == MODE_LOCAL:
+		return true
+
+	if not network_client.is_socket_connected():
+		return false
+
+	if assigned_player.is_empty():
+		return false
+
+	if not pending_action.is_empty():
+		return false
+
+	return match_state.current_player == assigned_player
+
+
+func _blocked_action_result() -> Dictionary:
+	if mode == MODE_ONLINE:
+		if not network_client.is_socket_connected():
+			match_state.status_message = "Connect or join a room first"
+		elif assigned_player.is_empty():
+			match_state.status_message = "Waiting for room assignment"
+		elif not pending_action.is_empty():
+			match_state.status_message = "Waiting for server snapshot"
+		elif match_state.current_player != assigned_player:
+			match_state.status_message = "Waiting for %s" % GameDefs.player_label(match_state.current_player)
+		else:
+			match_state.status_message = "Action is blocked"
+
+		_refresh()
+
+	return {
+		"ok": false,
+		"message": match_state.status_message,
+	}
+
+
+func _network_hud_state() -> Dictionary:
+	return {
+		"mode": mode,
+		"connected": network_client.is_socket_connected(),
+		"assigned_player": assigned_player,
+		"room_code": online_room_code,
+		"players": online_players,
+		"pending_action": not pending_action.is_empty(),
+		"pending_room_request": pending_room_request,
+		"status": network_status,
+	}
 
 
 func _try_select_striker_source(cell: Vector2i) -> Dictionary:

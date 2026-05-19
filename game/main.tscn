@@ -400,6 +400,143 @@ text = "R"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="NetworkToggleButton" type="Button" parent="HUD/Root"]
+custom_minimum_size = Vector2(112, 34)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -130.0
+offset_top = -52.0
+offset_right = -18.0
+offset_bottom = -18.0
+grow_horizontal = 0
+grow_vertical = 0
+focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
+text = "Online"
+
+[node name="NetworkPanel" type="PanelContainer" parent="HUD/Root"]
+visible = false
+custom_minimum_size = Vector2(314, 116)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -332.0
+offset_top = -180.0
+offset_right = -18.0
+offset_bottom = -64.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_inspector_panel")
+
+[node name="NetworkMargin" type="MarginContainer" parent="HUD/Root/NetworkPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="NetworkVBox" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NetworkTitle" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "ONLINE"
+
+[node name="SetupContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="JoinRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoomCodeEdit" type="LineEdit" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow"]
+custom_minimum_size = Vector2(180, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+placeholder_text = "Room code"
+
+[node name="JoinRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow"]
+custom_minimum_size = Vector2(88, 30)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
+text = "Join"
+
+[node name="CreateRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
+text = "Create"
+
+[node name="LobbyContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LobbyCodeRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LobbyCodeLabel" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+custom_minimum_size = Vector2(104, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Room ------"
+vertical_alignment = 1
+
+[node name="CopyCodeButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+custom_minimum_size = Vector2(62, 30)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
+text = "Copy"
+
+[node name="LobbyCodeSpacer" type="Control" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PlayersRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="PlayerOneIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow"]
+custom_minimum_size = Vector2(34, 26)
+layout_mode = 2
+text = "P1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PlayerTwoIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow"]
+custom_minimum_size = Vector2(34, 26)
+layout_mode = 2
+text = "P2"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LeaveRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
+text = "Leave room"
+
 [node name="UpgradePopup" type="PopupMenu" parent="HUD/Root" unique_id=920608351]
 position = Vector2i(936, 184)
 size = Vector2i(164, 54)

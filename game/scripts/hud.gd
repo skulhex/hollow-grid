@@ -6,6 +6,9 @@ signal upgrade_role_selected(action_type: String, target_cell: Vector2i)
 signal module_kind_selected(action_type: String, target_cell: Vector2i)
 signal skip_requested
 signal restart_requested
+signal online_create_requested
+signal online_join_requested(room_code: String)
+signal online_leave_requested
 
 const ACTION_UPGRADE_NODE := "upgrade_node"
 const ACTION_BUILD_MODULE := "build_module"
@@ -19,6 +22,7 @@ const MENU_REPAIR_MODULE := 6
 @onready var status_panel: PanelContainer = $Root/StatusPanel
 @onready var command_panel: PanelContainer = $Root/CommandPanel
 @onready var inspector_panel: PanelContainer = $Root/InspectorPanel
+@onready var network_panel: PanelContainer = $Root/NetworkPanel
 @onready var turn_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/TurnLabel
 @onready var core_hp_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/CoreHpLabel
 @onready var action_limit_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ActionLimitLabel
@@ -31,8 +35,19 @@ const MENU_REPAIR_MODULE := 6
 @onready var upgrade_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/UpgradeRow/UpgradeButton
 @onready var module_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/ModuleRow/ModuleButton
 @onready var skip_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/SkipRow/SkipButton
+@onready var network_toggle_button: Button = $Root/NetworkToggleButton
 @onready var restart_button: Button = $Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow/RestartButton
 @onready var status_label: Label = $Root/CommandPanel/CommandMargin/CommandVBox/StatusLabel
+@onready var setup_container: VBoxContainer = $Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer
+@onready var room_code_edit: LineEdit = $Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow/RoomCodeEdit
+@onready var join_room_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow/JoinRoomButton
+@onready var create_room_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/CreateRoomButton
+@onready var lobby_container: VBoxContainer = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer
+@onready var lobby_code_label: Label = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/LobbyCodeLabel
+@onready var copy_code_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/CopyCodeButton
+@onready var player_one_indicator: Label = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow/PlayerOneIndicator
+@onready var player_two_indicator: Label = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow/PlayerTwoIndicator
+@onready var leave_room_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LeaveRoomButton
 @onready var inspector_title: Label = $Root/InspectorPanel/InspectorMargin/InspectorVBox/InspectorTitle
 @onready var inspector_cell_label: Label = $Root/InspectorPanel/InspectorMargin/InspectorVBox/InspectorCellLabel
 @onready var inspector_owner_label: Label = $Root/InspectorPanel/InspectorMargin/InspectorVBox/InspectorOwnerLabel
@@ -52,6 +67,7 @@ const MENU_REPAIR_MODULE := 6
 var upgrade_target_cell := BoardView.HOVER_NONE
 var module_target_cell := BoardView.HOVER_NONE
 var current_selected_action_type := GameAction.TYPE_PLACE_NODE
+var current_network_state: Dictionary = {}
 
 
 func _ready() -> void:
@@ -62,12 +78,21 @@ func _ready() -> void:
 	upgrade_button.pressed.connect(_on_upgrade_pressed)
 	module_button.pressed.connect(_on_module_pressed)
 	skip_button.pressed.connect(_on_skip_pressed)
+	network_toggle_button.pressed.connect(_on_network_toggle_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
+	create_room_button.pressed.connect(_on_create_room_pressed)
+	join_room_button.pressed.connect(_on_join_room_pressed)
+	copy_code_button.pressed.connect(_on_copy_code_pressed)
+	leave_room_button.pressed.connect(_on_leave_room_pressed)
+	room_code_edit.text_changed.connect(_on_network_text_changed)
+	room_code_edit.text_submitted.connect(_on_room_code_submitted)
 	upgrade_popup.id_pressed.connect(_on_upgrade_menu_id_pressed)
 	module_button.tooltip_text = "Build a connected module"
+	network_panel.visible = false
 
 
-func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE, hover_cell: Vector2i = BoardView.HOVER_NONE) -> void:
+func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE, hover_cell: Vector2i = BoardView.HOVER_NONE, network_state: Dictionary = {}) -> void:
+	current_network_state = network_state.duplicate()
 	current_selected_action_type = selected_action_type
 	turn_label.text = GameDefs.player_label(match_state.current_player)
 	turn_label.add_theme_color_override("font_color", GameDefs.player_color(match_state.current_player))
@@ -92,8 +117,9 @@ func refresh(match_state: MatchState, selected_action_type: String, striker_atta
 	repair_button.button_pressed = selected_action_type == GameAction.TYPE_REPAIR_NODE
 	upgrade_button.button_pressed = selected_action_type == ACTION_UPGRADE_NODE
 	module_button.button_pressed = selected_action_type == ACTION_BUILD_MODULE
-	_refresh_button_states(match_state)
+	_refresh_button_states(match_state, network_state)
 	_refresh_inspector(match_state, hover_cell)
+	_refresh_network_state(network_state)
 
 	if match_state.finished:
 		status_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.28))
@@ -123,12 +149,71 @@ func show_module_menu(screen_position: Vector2, target_cell: Vector2i) -> void:
 	upgrade_popup.popup()
 
 
-func _refresh_button_states(match_state: MatchState) -> void:
-	place_button.disabled = match_state.finished or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_PLACE_NODE)
-	repair_button.disabled = match_state.finished or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_REPAIR_NODE)
-	upgrade_button.disabled = match_state.finished or not _player_has_upgrade_option(match_state)
-	module_button.disabled = match_state.finished or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_BUILD_CONNECTION_MODULE)
-	skip_button.disabled = match_state.finished
+func _refresh_button_states(match_state: MatchState, network_state: Dictionary) -> void:
+	var gameplay_locked := _gameplay_locked(match_state, network_state)
+	place_button.disabled = gameplay_locked or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_PLACE_NODE)
+	repair_button.disabled = gameplay_locked or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_REPAIR_NODE)
+	upgrade_button.disabled = gameplay_locked or not _player_has_upgrade_option(match_state)
+	module_button.disabled = gameplay_locked or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_BUILD_CONNECTION_MODULE)
+	skip_button.disabled = gameplay_locked
+	restart_button.disabled = str(network_state.get("mode", "local")) == "online"
+
+
+func _refresh_network_state(network_state: Dictionary) -> void:
+	var mode := str(network_state.get("mode", "local"))
+	var room_code := str(network_state.get("room_code", ""))
+	var assigned_player := str(network_state.get("assigned_player", ""))
+	var players: Array = _players_from_network_state(network_state)
+	var pending_room_request := str(network_state.get("pending_room_request", ""))
+	var is_online := mode == "online"
+	var in_room := is_online and not room_code.is_empty() and not assigned_player.is_empty()
+	var is_busy := is_online and pending_room_request != ""
+
+	if in_room and room_code_edit.text != room_code:
+		room_code_edit.text = room_code
+
+	setup_container.visible = not in_room
+	lobby_container.visible = in_room
+	create_room_button.disabled = is_busy or in_room
+	join_room_button.disabled = is_busy or in_room or room_code_edit.text.strip_edges().is_empty()
+	lobby_code_label.text = "Room %s" % room_code
+	copy_code_button.text = "Copy"
+	player_one_indicator.text = "P1"
+	player_two_indicator.text = "P2"
+	_set_player_indicator(player_one_indicator, GameDefs.PLAYER_ONE in players or assigned_player == GameDefs.PLAYER_ONE, GameDefs.PLAYER_ONE)
+	_set_player_indicator(player_two_indicator, GameDefs.PLAYER_TWO in players or assigned_player == GameDefs.PLAYER_TWO, GameDefs.PLAYER_TWO)
+
+
+func _gameplay_locked(match_state: MatchState, network_state: Dictionary) -> bool:
+	if match_state.finished:
+		return true
+
+	if str(network_state.get("mode", "local")) != "online":
+		return false
+
+	if not bool(network_state.get("connected", false)):
+		return true
+
+	var assigned_player := str(network_state.get("assigned_player", ""))
+	if assigned_player.is_empty():
+		return true
+
+	if bool(network_state.get("pending_action", false)):
+		return true
+
+	return assigned_player != match_state.current_player
+
+
+func is_text_input_focused() -> bool:
+	return room_code_edit.has_focus()
+
+
+func release_text_input_focus() -> void:
+	_release_network_focus()
+
+
+func clear_room_code_input() -> void:
+	room_code_edit.text = ""
 
 
 func _refresh_inspector(match_state: MatchState, hover_cell: Vector2i) -> void:
@@ -286,6 +371,7 @@ func _apply_theme() -> void:
 	status_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.07, 0.082, 0.098, 0.82)))
 	command_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.94)))
 	inspector_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.88)))
+	network_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.88)))
 
 	turn_label.add_theme_font_size_override("font_size", 20)
 	core_hp_label.add_theme_font_size_override("font_size", 15)
@@ -320,7 +406,16 @@ func _apply_theme() -> void:
 	_style_action_button(upgrade_button, Color(0.95, 0.78, 0.28))
 	_style_action_button(module_button, Color(0.72, 0.58, 0.96))
 	_style_skip_button(skip_button)
+	_style_utility_button(network_toggle_button)
 	_style_utility_button(restart_button)
+	_style_utility_button(create_room_button)
+	_style_utility_button(join_room_button)
+	_style_utility_button(copy_code_button)
+	_style_utility_button(leave_room_button)
+	_style_line_edit(room_code_edit)
+	lobby_code_label.add_theme_font_size_override("font_size", 16)
+	lobby_code_label.add_theme_color_override("font_color", Color(0.92, 0.95, 0.98))
+	network_toggle_button.text = "Online"
 
 	for key_label in key_labels:
 		key_label.add_theme_font_size_override("font_size", 12)
@@ -358,6 +453,15 @@ func _style_utility_button(button: Button) -> void:
 	button.add_theme_stylebox_override("pressed", _button_style(Color(0.16, 0.18, 0.205), Color(0.52, 0.58, 0.66)))
 	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	button.add_theme_color_override("font_color", Color(0.64, 0.7, 0.78))
+	button.add_theme_color_override("font_disabled_color", Color(0.42, 0.46, 0.52))
+
+
+func _style_line_edit(line_edit: LineEdit) -> void:
+	line_edit.add_theme_font_size_override("font_size", 13)
+	line_edit.add_theme_stylebox_override("normal", _line_edit_style(Color(0.055, 0.065, 0.078), Color(0.2, 0.23, 0.27)))
+	line_edit.add_theme_stylebox_override("focus", _line_edit_style(Color(0.075, 0.09, 0.11), Color(0.36, 0.4, 0.46)))
+	line_edit.add_theme_color_override("font_color", Color(0.86, 0.9, 0.94))
+	line_edit.add_theme_color_override("font_placeholder_color", Color(0.42, 0.46, 0.52))
 
 
 func _panel_style(color: Color) -> StyleBoxFlat:
@@ -387,6 +491,15 @@ func _button_style(fill: Color, border: Color) -> StyleBoxFlat:
 	style.corner_radius_top_right = 6
 	style.corner_radius_bottom_left = 6
 	style.corner_radius_bottom_right = 6
+	return style
+
+
+func _line_edit_style(fill: Color, border: Color) -> StyleBoxFlat:
+	var style := _button_style(fill, border)
+	style.set_content_margin(SIDE_LEFT, 10.0)
+	style.set_content_margin(SIDE_RIGHT, 10.0)
+	style.set_content_margin(SIDE_TOP, 4.0)
+	style.set_content_margin(SIDE_BOTTOM, 4.0)
 	return style
 
 
@@ -451,6 +564,64 @@ func _on_skip_pressed() -> void:
 
 func _on_restart_pressed() -> void:
 	restart_requested.emit()
+
+
+func _on_network_toggle_pressed() -> void:
+	network_panel.visible = not network_panel.visible
+	if not network_panel.visible:
+		_release_network_focus()
+
+
+func _on_create_room_pressed() -> void:
+	_release_network_focus()
+	online_create_requested.emit()
+
+
+func _on_join_room_pressed() -> void:
+	_release_network_focus()
+	online_join_requested.emit(room_code_edit.text.strip_edges())
+
+
+func _on_copy_code_pressed() -> void:
+	var room_code := str(current_network_state.get("room_code", ""))
+	if room_code.is_empty():
+		return
+
+	DisplayServer.clipboard_set(room_code)
+	copy_code_button.text = "Copied"
+
+
+func _on_network_text_changed(_text: String) -> void:
+	_refresh_network_state(current_network_state)
+
+
+func _on_room_code_submitted(_text: String) -> void:
+	if not join_room_button.disabled:
+		_on_join_room_pressed()
+
+
+func _on_leave_room_pressed() -> void:
+	_release_network_focus()
+	online_leave_requested.emit()
+
+
+func _release_network_focus() -> void:
+	room_code_edit.release_focus()
+
+
+func _players_from_network_state(network_state: Dictionary) -> Array:
+	var value: Variant = network_state.get("players", [])
+	if value is Array:
+		return value
+
+	return []
+
+
+func _set_player_indicator(label: Label, present: bool, player: String) -> void:
+	var color := GameDefs.player_color(player)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0) if present else Color(0.38, 0.42, 0.48))
+	label.add_theme_stylebox_override("normal", _button_style(color.darkened(0.25) if present else Color(0.07, 0.08, 0.095), color if present else Color(0.18, 0.2, 0.23)))
 
 
 func _action_label(action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE) -> String:

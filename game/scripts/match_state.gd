@@ -108,6 +108,38 @@ func to_snapshot() -> Dictionary:
 	}
 
 
+func load_snapshot(snapshot: Dictionary) -> void:
+	current_player = str(snapshot.get("current_player", current_player))
+	turn_number = int(snapshot.get("turn", turn_number))
+	round_number = int(snapshot.get("round", round_number))
+	finished = bool(snapshot.get("finished", finished))
+	status_message = str(snapshot.get("status_message", status_message))
+
+	var snapshot_core_hp: Dictionary = _dictionary_from_snapshot(snapshot.get("core_hp", {}))
+	core_hp[GameDefs.PLAYER_ONE] = int(snapshot_core_hp.get(GameDefs.PLAYER_ONE, core_hp[GameDefs.PLAYER_ONE]))
+	core_hp[GameDefs.PLAYER_TWO] = int(snapshot_core_hp.get(GameDefs.PLAYER_TWO, core_hp[GameDefs.PLAYER_TWO]))
+
+	var snapshot_resources: Dictionary = _dictionary_from_snapshot(snapshot.get("resources", {}))
+	resources[GameDefs.PLAYER_ONE] = int(snapshot_resources.get(GameDefs.PLAYER_ONE, resources[GameDefs.PLAYER_ONE]))
+	resources[GameDefs.PLAYER_TWO] = int(snapshot_resources.get(GameDefs.PLAYER_TWO, resources[GameDefs.PLAYER_TWO]))
+
+	var action_limits: Dictionary = _dictionary_from_snapshot(snapshot.get("action_limits", {}))
+	connection_actions_left = int(action_limits.get("connection_actions_left", connection_actions_left))
+	repair_actions_left = int(action_limits.get("repair_actions_left", repair_actions_left))
+
+	objects.clear()
+	var snapshot_objects: Array = _array_from_snapshot(snapshot.get("objects", []))
+	for raw_object in snapshot_objects:
+		if not raw_object is Dictionary:
+			continue
+
+		var object := _object_from_snapshot(raw_object)
+		if object.is_empty():
+			continue
+
+		objects[cell_key(object["cell"])] = object
+
+
 func apply_action(raw_action: Variant) -> Dictionary:
 	var action := _parse_action(raw_action)
 
@@ -1546,6 +1578,60 @@ func _cell_to_payload(cell: Vector2i) -> Dictionary:
 		GameAction.KEY_CELL_Q: cell.x,
 		GameAction.KEY_CELL_R: cell.y,
 	}
+
+
+func _cell_from_payload(raw_cell: Variant) -> Vector2i:
+	if raw_cell is Vector2i:
+		return raw_cell
+
+	if raw_cell is Dictionary:
+		return Vector2i(
+			int(raw_cell.get(GameAction.KEY_CELL_Q, 0)),
+			int(raw_cell.get(GameAction.KEY_CELL_R, 0))
+		)
+
+	return Vector2i.ZERO
+
+
+func _dictionary_from_snapshot(value: Variant) -> Dictionary:
+	if value is Dictionary:
+		return value
+
+	return {}
+
+
+func _array_from_snapshot(value: Variant) -> Array:
+	if value is Array:
+		return value
+
+	return []
+
+
+func _object_from_snapshot(snapshot: Dictionary) -> Dictionary:
+	if not snapshot.has("cell"):
+		return {}
+
+	var object_type := str(snapshot.get("type", ""))
+	if object_type not in [OBJECT_CORE, OBJECT_NODE, OBJECT_MODULE]:
+		return {}
+
+	var object := {
+		"cell": _cell_from_payload(snapshot.get("cell", {})),
+		"type": object_type,
+		"owner": str(snapshot.get("owner", "")),
+		"active": bool(snapshot.get("active", false)),
+		"disabled": bool(snapshot.get("disabled", false)),
+	}
+
+	if object_type == OBJECT_NODE:
+		object["role"] = str(snapshot.get("role", NODE_CONDUIT))
+		object["ready"] = bool(snapshot.get("ready", false))
+		object["action_charges"] = int(snapshot.get("action_charges", 0))
+	elif object_type == OBJECT_MODULE:
+		object["module_kind"] = str(snapshot.get("module_kind", ""))
+		object["ready"] = bool(snapshot.get("ready", false))
+
+	return object
 
 
 func _objects_to_snapshot() -> Array[Dictionary]:
