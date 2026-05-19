@@ -4,6 +4,102 @@
 [ext_resource type="Script" uid="uid://6t4gy4jfhm06" path="res://scripts/board_view.gd" id="2_board_view"]
 [ext_resource type="Script" uid="uid://n746t6qbyyl8" path="res://scripts/hud.gd" id="3_hud"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status_panel"]
+bg_color = Color(0.07, 0.082, 0.098, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.22, 0.25, 0.29, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_command_panel"]
+bg_color = Color(0.065, 0.078, 0.094, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.22, 0.25, 0.29, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_inspector_panel"]
+bg_color = Color(0.065, 0.078, 0.094, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.22, 0.25, 0.29, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_action_button"]
+bg_color = Color(0.1, 0.12, 0.145, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.22, 0.25, 0.29, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_module_button"]
+bg_color = Color(0.078, 0.088, 0.102, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.15, 0.17, 0.2, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_skip_button"]
+bg_color = Color(0.17, 0.19, 0.14, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.47, 0.28, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_utility_button"]
+bg_color = Color(0.085, 0.095, 0.11, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.23, 0.27, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_key_label"]
+bg_color = Color(0.12, 0.14, 0.165, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.34, 0.39, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
 [node name="Main" type="Node2D" unique_id=1659134553]
 script = ExtResource("1_main")
 
@@ -22,278 +118,287 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="StatusPanel" type="PanelContainer" parent="HUD/Root"]
+[node name="StatusPanel" type="PanelContainer" parent="HUD/Root" unique_id=1014467830]
+custom_minimum_size = Vector2(340, 176)
 layout_mode = 1
 offset_left = 18.0
 offset_top = 18.0
-offset_right = 322.0
-offset_bottom = 176.0
+offset_right = 358.0
+offset_bottom = 194.0
 mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_status_panel")
 
-[node name="StatusMargin" type="MarginContainer" parent="HUD/Root/StatusPanel"]
+[node name="StatusMargin" type="MarginContainer" parent="HUD/Root/StatusPanel" unique_id=1600071802]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 12
 
-[node name="StatusVBox" type="VBoxContainer" parent="HUD/Root/StatusPanel/StatusMargin"]
+[node name="StatusVBox" type="VBoxContainer" parent="HUD/Root/StatusPanel/StatusMargin" unique_id=1579119231]
 layout_mode = 2
 theme_override_constants/separation = 5
 
-[node name="TurnLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="TurnLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=62877675]
 layout_mode = 2
+theme_override_font_sizes/font_size = 20
 text = "Player 1"
 
-[node name="CoreHpLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="CoreHpLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=1740033915]
 layout_mode = 2
+theme_override_font_sizes/font_size = 13
 text = "Core HP: P1 5 / P2 5"
 
-[node name="ActionLimitLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="ActionLimitLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=1646695045]
 layout_mode = 2
-text = "Actions: Connect 1 / Repair 1"
+theme_override_font_sizes/font_size = 13
+text = "Action limits: Connection 1 / Repair 1"
 
-[node name="ResourceLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="ResourceLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=474242962]
 layout_mode = 2
-text = "Resource: P1 0 / P2 0"
+theme_override_font_sizes/font_size = 13
+text = "Resource: P1 1 / P2 1"
 
-[node name="UpkeepLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="PreviewLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=2036555453]
 layout_mode = 2
-text = "Upkeep: ready"
+theme_override_font_sizes/font_size = 14
+text = "Next turn: Player 2 +0R, 0 charges restored"
 
-[node name="SelectedLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+[node name="SelectedLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=798393223]
 layout_mode = 2
-text = "Mode: Place Node"
+theme_override_font_sizes/font_size = 14
+text = "Selected: Build connection"
 
-[node name="CommandPanel" type="PanelContainer" parent="HUD/Root"]
+[node name="InspectorPanel" type="PanelContainer" parent="HUD/Root" unique_id=438573919]
+custom_minimum_size = Vector2(340, 192)
+layout_mode = 1
+anchors_preset = -1
+offset_left = 18.0
+offset_top = 218.0
+offset_right = 358.0
+offset_bottom = 410.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_inspector_panel")
+
+[node name="InspectorMargin" type="MarginContainer" parent="HUD/Root/InspectorPanel" unique_id=592498614]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="InspectorVBox" type="VBoxContainer" parent="HUD/Root/InspectorPanel/InspectorMargin" unique_id=2111610256]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="InspectorTitle" type="Label" parent="HUD/Root/InspectorPanel/InspectorMargin/InspectorVBox" unique_id=232171955]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "CELL INSPECTOR"
+
+[node name="InspectorCellLabel" type="Label" parent="HUD/Root/InspectorPanel/InspectorMargin/InspectorVBox" unique_id=1135394579]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Cell: none"
+
+[node name="InspectorOwnerLabel" type="Label" parent="HUD/Root/InspectorPanel/InspectorMargin/InspectorVBox" unique_id=1600898017]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Owner: -"
+
+[node name="InspectorStateLabel" type="Label" parent="HUD/Root/InspectorPanel/InspectorMargin/InspectorVBox" unique_id=2093111597]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "State: move over a hex"
+
+[node name="InspectorReadyLabel" type="Label" parent="HUD/Root/InspectorPanel/InspectorMargin/InspectorVBox" unique_id=2082897717]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Ready: -"
+
+[node name="InspectorActionsLabel" type="Label" parent="HUD/Root/InspectorPanel/InspectorMargin/InspectorVBox" unique_id=2119846692]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Actions: -"
+autowrap_mode = 3
+
+[node name="CommandPanel" type="PanelContainer" parent="HUD/Root" unique_id=348689774]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -350.0
-offset_top = 116.0
+offset_left = -332.0
+offset_top = 18.0
 offset_right = -18.0
-offset_bottom = 702.0
+offset_bottom = 398.0
 grow_horizontal = 0
-mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_command_panel")
 
-[node name="CommandMargin" type="MarginContainer" parent="HUD/Root/CommandPanel"]
+[node name="CommandMargin" type="MarginContainer" parent="HUD/Root/CommandPanel" unique_id=2048165445]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 14
 
-[node name="CommandVBox" type="VBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin"]
+[node name="CommandVBox" type="VBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin" unique_id=427949071]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="CommandTitle" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="CommandTitle" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=2042057458]
 layout_mode = 2
-text = "COMMAND"
+theme_override_font_sizes/font_size = 13
+text = "ACTIONS"
 
-[node name="PlaceRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="PlaceRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=1356882553]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlaceButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow"]
-custom_minimum_size = Vector2(230, 42)
+[node name="PlaceButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow" unique_id=1677161390]
+custom_minimum_size = Vector2(238, 40)
 layout_mode = 2
 focus_mode = 0
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_action_button")
 toggle_mode = true
-text = "Place Node"
+text = "Build connection"
 
-[node name="PlaceKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow"]
-custom_minimum_size = Vector2(44, 42)
+[node name="PlaceKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/PlaceRow" unique_id=1045412215]
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_key_label")
 text = "1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="RepairRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="RepairRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=343256634]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RepairButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/RepairRow"]
-custom_minimum_size = Vector2(230, 42)
+[node name="RepairButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/RepairRow" unique_id=2128702023]
+custom_minimum_size = Vector2(238, 40)
 layout_mode = 2
 focus_mode = 0
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_action_button")
 toggle_mode = true
-text = "Repair Node"
+text = "Repair"
 
-[node name="RepairKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/RepairRow"]
-custom_minimum_size = Vector2(44, 42)
+[node name="RepairKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/RepairRow" unique_id=1136058241]
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_key_label")
 text = "2"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ClearRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
-visible = false
+[node name="UpgradeRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=320585045]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ClearButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ClearRow"]
-custom_minimum_size = Vector2(230, 42)
+[node name="UpgradeButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UpgradeRow" unique_id=1473596024]
+custom_minimum_size = Vector2(238, 40)
 layout_mode = 2
 focus_mode = 0
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_action_button")
 toggle_mode = true
-text = "Clear Node"
+text = "Upgrade node"
 
-[node name="ClearKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ClearRow"]
-custom_minimum_size = Vector2(44, 42)
+[node name="UpgradeKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UpgradeRow" unique_id=365653407]
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_key_label")
 text = "3"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="HarvesterRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="ModuleRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=1197343146]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="HarvesterButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow"]
-custom_minimum_size = Vector2(230, 42)
+[node name="ModuleButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ModuleRow" unique_id=27719022]
+custom_minimum_size = Vector2(238, 40)
 layout_mode = 2
 focus_mode = 0
-toggle_mode = true
-text = "Upgrade Harvester (1R)"
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_module_button")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_module_button")
+disabled = true
+text = "Build module"
 
-[node name="HarvesterKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/HarvesterRow"]
-custom_minimum_size = Vector2(44, 42)
+[node name="ModuleKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ModuleRow" unique_id=358839937]
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-text = "3"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="StrikerRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="StrikerButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow"]
-custom_minimum_size = Vector2(230, 42)
-layout_mode = 2
-focus_mode = 0
-toggle_mode = true
-text = "Upgrade Striker (1R)"
-
-[node name="StrikerKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/StrikerRow"]
-custom_minimum_size = Vector2(44, 42)
-layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_key_label")
 text = "4"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="CommandSeparator" type="HSeparator" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="CommandSeparator" type="HSeparator" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=629540232]
 layout_mode = 2
 
-[node name="SkipRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="SkipRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=60217737]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="SkipButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow"]
-custom_minimum_size = Vector2(230, 50)
+[node name="SkipButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow" unique_id=569966520]
+custom_minimum_size = Vector2(238, 40)
 layout_mode = 2
 focus_mode = 0
-text = "End Turn"
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_skip_button")
+text = "End turn"
 
-[node name="SkipKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow"]
-custom_minimum_size = Vector2(44, 50)
+[node name="SkipKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/SkipRow" unique_id=775445922]
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_key_label")
 text = "Space"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="MessageSeparator" type="HSeparator" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="MessageSeparator" type="HSeparator" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=1632770997]
 layout_mode = 2
 
-[node name="StatusLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="StatusLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=806095965]
 layout_mode = 2
 size_flags_vertical = 3
-text = "Player 1: place a node"
+theme_override_font_sizes/font_size = 14
+text = "Player 1: build, repair, upgrade, or end turn"
 autowrap_mode = 3
 
-[node name="UtilityRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox"]
+[node name="UtilityRow" type="HBoxContainer" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox" unique_id=1745945861]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="UtilitySpacer" type="Control" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow"]
+[node name="UtilitySpacer" type="Control" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow" unique_id=1428866064]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RestartButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow"]
+[node name="RestartButton" type="Button" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow" unique_id=142853209]
 custom_minimum_size = Vector2(132, 30)
 layout_mode = 2
 focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Restart"
 
-[node name="RestartKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow"]
+[node name="RestartKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/UtilityRow" unique_id=1003833119]
 custom_minimum_size = Vector2(32, 30)
 layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_key_label")
 text = "R"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="HistoryPanel" type="PanelContainer" parent="HUD/Root"]
-layout_mode = 1
-anchors_preset = -1
-offset_left = 18.0
-offset_top = 194.0
-offset_right = 322.0
-offset_bottom = 368.0
-grow_horizontal = 0
-mouse_filter = 2
-
-[node name="HistoryMargin" type="MarginContainer" parent="HUD/Root/HistoryPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 12
-
-[node name="HistoryVBox" type="VBoxContainer" parent="HUD/Root/HistoryPanel/HistoryMargin"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="HistoryTitle" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox"]
-layout_mode = 2
-text = "HISTORY"
-
-[node name="HistoryList" type="VBoxContainer" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox"]
-layout_mode = 2
-theme_override_constants/separation = 2
-
-[node name="HistoryEmptyLabel" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-layout_mode = 2
-text = "No moves yet"
-
-[node name="Move1Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move2Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move3Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move4Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move5Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move6Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move7Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
-
-[node name="Move8Label" type="Label" parent="HUD/Root/HistoryPanel/HistoryMargin/HistoryVBox/HistoryList"]
-visible = false
-layout_mode = 2
+[node name="UpgradePopup" type="PopupMenu" parent="HUD/Root" unique_id=920608351]
+position = Vector2i(936, 184)
+size = Vector2i(164, 54)

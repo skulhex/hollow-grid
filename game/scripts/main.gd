@@ -18,6 +18,7 @@ func _ready() -> void:
 	match_state = MatchState.new(BOARD_RADIUS)
 
 	hud.action_selected.connect(_select_action)
+	hud.upgrade_role_selected.connect(_submit_upgrade_role)
 	hud.skip_requested.connect(_skip_turn)
 	hud.restart_requested.connect(_restart_match)
 
@@ -61,9 +62,10 @@ func _handle_key(event: InputEventKey) -> void:
 		KEY_2:
 			_select_action(GameAction.TYPE_REPAIR_NODE)
 		KEY_3:
-			_select_action(GameAction.TYPE_UPGRADE_HARVESTER)
+			_select_action(GameHud.ACTION_UPGRADE_NODE)
 		KEY_4:
-			_select_action(GameAction.TYPE_UPGRADE_STRIKER)
+			match_state.status_message = "Modules are not available in MVP"
+			_refresh()
 		KEY_SPACE:
 			_skip_turn()
 		KEY_R:
@@ -73,6 +75,9 @@ func _handle_key(event: InputEventKey) -> void:
 func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
 		return _submit_striker_attack_target(cell)
+
+	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
+		return _open_upgrade_role_menu(cell)
 
 	if selected_action_type == DEFAULT_ACTION_TYPE and _cell_has_current_player_striker(cell):
 		return _try_select_striker_source(cell)
@@ -98,10 +103,6 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 			return _submit_action(GameAction.place_node(match_state.current_player, cell))
 		GameAction.TYPE_REPAIR_NODE:
 			return _submit_action(GameAction.repair_node(match_state.current_player, cell))
-		GameAction.TYPE_UPGRADE_HARVESTER:
-			return _submit_action(GameAction.upgrade_harvester(match_state.current_player, cell))
-		GameAction.TYPE_UPGRADE_STRIKER:
-			return _submit_action(GameAction.upgrade_striker(match_state.current_player, cell))
 		_:
 			return {
 				"ok": false,
@@ -149,8 +150,7 @@ func _select_action(action_type: String) -> void:
 	if action_type not in [
 		GameAction.TYPE_PLACE_NODE,
 		GameAction.TYPE_REPAIR_NODE,
-		GameAction.TYPE_UPGRADE_HARVESTER,
-		GameAction.TYPE_UPGRADE_STRIKER,
+		GameHud.ACTION_UPGRADE_NODE,
 	]:
 		return
 
@@ -159,6 +159,14 @@ func _select_action(action_type: String) -> void:
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
 	_refresh()
+
+
+func _submit_upgrade_role(action_type: String, target_cell: Vector2i) -> void:
+	match action_type:
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			_submit_action(GameAction.upgrade_harvester(match_state.current_player, target_cell))
+		GameAction.TYPE_UPGRADE_STRIKER:
+			_submit_action(GameAction.upgrade_striker(match_state.current_player, target_cell))
 
 
 func _skip_turn() -> void:
@@ -185,14 +193,18 @@ func _update_hover(mouse_position: Vector2) -> void:
 	if not grid.contains(next_hover):
 		next_hover = BoardView.HOVER_NONE
 
+	if next_hover == board_view.hover_cell:
+		return
+
 	board_view.set_hover_cell(next_hover)
+	_refresh()
 
 
 func _refresh() -> void:
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
 	board_view.queue_redraw()
-	hud.refresh(match_state, selected_action_type, selected_striker_source)
+	hud.refresh(match_state, selected_action_type, selected_striker_source, board_view.hover_cell)
 
 
 func _try_select_striker_source(cell: Vector2i) -> Dictionary:
@@ -245,16 +257,45 @@ func _cell_has_current_player_striker(cell: Vector2i) -> bool:
 	return object.get("role", MatchState.NODE_CONDUIT) == MatchState.NODE_STRIKER
 
 
+func _open_upgrade_role_menu(cell: Vector2i) -> Dictionary:
+	if not _can_select_upgrade_target(cell):
+		if match_state.can_target_action_shape(GameAction.TYPE_UPGRADE_HARVESTER, cell) and not match_state.can_afford_target_action(match_state.current_player, GameAction.TYPE_UPGRADE_HARVESTER, cell):
+			var required_resource_cost := match_state.action_target_resource_cost(match_state.current_player, GameAction.TYPE_UPGRADE_HARVESTER, cell)
+			match_state.status_message = match_state.action_resource_requirement_message(GameAction.TYPE_UPGRADE_HARVESTER, required_resource_cost)
+		else:
+			match_state.status_message = "Select a highlighted node to upgrade"
+
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	hud.show_upgrade_menu(get_viewport().get_mouse_position(), cell)
+	match_state.status_message = "Choose a role for this node"
+	_refresh()
+	return {
+		"ok": true,
+		"message": match_state.status_message,
+	}
+
+
+func _can_select_upgrade_target(cell: Vector2i) -> bool:
+	return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell)
+
+
 func _action_label(action_type: String) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
-			return "Place"
+			return "Build connection"
 		GameAction.TYPE_REPAIR_NODE:
 			return "Repair"
+		GameHud.ACTION_UPGRADE_NODE:
+			return "Upgrade node"
 		GameAction.TYPE_UPGRADE_HARVESTER:
-			return "Upgrade Harvester"
+			return "Upgrade node: Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
-			return "Upgrade Striker"
+			return "Upgrade node: Striker"
 		GameAction.TYPE_STRIKER_ATTACK:
 			return "Striker Attack"
 		_:

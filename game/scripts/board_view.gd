@@ -217,6 +217,9 @@ func _target_color() -> Color:
 	if selected_action_type == GameAction.TYPE_REPAIR_NODE:
 		return Color(0.48, 0.78, 0.38)
 
+	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
+		return _resource_color().lerp(_warning_color(), 0.45)
+
 	if selected_action_type == GameAction.TYPE_UPGRADE_HARVESTER:
 		return _resource_color()
 
@@ -272,6 +275,9 @@ func _warning_color() -> Color:
 func _is_valid_target(cell: Vector2i) -> bool:
 	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
 		return striker_attack_source != HOVER_NONE and match_state.can_striker_attack(striker_attack_source, cell)
+
+	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
+		return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell)
 
 	return match_state.can_target_action(selected_action_type, cell)
 

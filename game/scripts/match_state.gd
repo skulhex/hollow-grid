@@ -227,6 +227,18 @@ func striker_source_status_message(cell: Vector2i) -> String:
 	return _striker_source_status_message(current_player, cell)
 
 
+func role_node_charge_preview(player: String) -> int:
+	return _preview_role_node_action_charges(player)
+
+
+func upkeep_preview(player: String) -> Dictionary:
+	return {
+		"player": player,
+		"resource_gain": _harvester_resource_gain(player),
+		"restored_charges": _preview_role_node_action_charges(player),
+	}
+
+
 func can_striker_attack(source_cell: Vector2i, target_cell: Vector2i) -> bool:
 	return _can_striker_attack(current_player, source_cell, target_cell)
 
@@ -906,6 +918,29 @@ func _reset_role_node_action_charges(player: String) -> int:
 		object["ready"] = true
 		object["action_charges"] = NODE_ROLE_ACTION_CHARGES_PER_TURN
 		objects[key] = object
+		charged_nodes += 1
+
+	return charged_nodes
+
+
+func _preview_role_node_action_charges(player: String) -> int:
+	var charged_nodes := 0
+
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") != OBJECT_NODE:
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		if object.get("role", NODE_CONDUIT) == NODE_CONDUIT:
+			continue
+
+		if object.get("disabled", false):
+			continue
+
 		charged_nodes += 1
 
 	return charged_nodes
