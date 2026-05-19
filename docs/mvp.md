@@ -86,14 +86,14 @@ Hollow Grid — абстрактная пошаговая multiplayer strategy g
 
 - пересчитать активную сеть;
 - восстановить `connection_actions_left` и `repair_actions_left`;
-- начислить `Resource` активному игроку, если у него есть активный `Harvester` рядом с `control point`;
+- начислить `Resource` активному игроку за каждый активный `Harvester` рядом с `control point`;
 - восстановить `action_charges` role-`Node` активного игрока.
 
 ## Resource от Harvester
 
 - `Resource` начисляется в start-of-turn upkeep активного игрока.
-- Если у активного игрока есть хотя бы один активный `Harvester` рядом с `control point`, он получает `+1 Resource`.
-- Несколько `Harvester` одного игрока рядом с `control point` пока не складываются: максимум `+1 Resource` за upkeep.
+- Каждый активный `Harvester` активного игрока рядом с `control point` даёт `+1 Resource`.
+- Несколько `Harvester` одного игрока рядом с `control point` складываются.
 
 ## Урон по Core
 

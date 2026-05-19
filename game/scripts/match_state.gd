@@ -645,6 +645,8 @@ func _can_upgrade_node(player: String, cell: Vector2i) -> bool:
 
 
 func _harvester_resource_gain(player: String) -> int:
+	var gain := 0
+
 	for direction in HexGrid.DIRECTIONS:
 		var object := get_object(CONTROL_POINT + direction)
 
@@ -664,9 +666,9 @@ func _harvester_resource_gain(player: String) -> int:
 			continue
 
 		if object.get("active", false):
-			return HARVESTER_RESOURCE_GAIN
+			gain += HARVESTER_RESOURCE_GAIN
 
-	return 0
+	return gain
 
 
 func _add_object(cell: Vector2i, type: String, owner: String) -> void:
