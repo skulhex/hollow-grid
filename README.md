@@ -2,7 +2,7 @@
 
 Hollow Grid — небольшая 2D multiplayer strategy game на hex-grid.
 
-Клиент игры разрабатывается на Godot с экспортом в Web/HTML5. Серверная часть будет отдельным Node.js приложением с WebSocket для синхронизации игроков.
+Клиент игры разрабатывается на Godot с экспортом в Web/HTML5. Серверная часть — Node.js + TypeScript WebSocket-сервер, который хранит авторитетное состояние матча.
 
 ## Цели проекта
 
@@ -22,11 +22,75 @@ hollow-grid/
   server/    Node.js WebSocket-сервер
 ```
 
+## Запуск сервера
+
+```sh
+cd server
+npm install
+npm run dev
+```
+
+По умолчанию сервер слушает:
+
+```text
+ws://127.0.0.1:8787
+```
+
+Порт можно изменить через `PORT`:
+
+```sh
+PORT=9000 npm run dev
+```
+
+## Проверка сервера
+
+```sh
+cd server
+npm test
+npm run build
+```
+
+`npm test` проверяет валидацию действий, TypeScript-порт правил матча и WebSocket room flow. `npm run build` проверяет TypeScript-компиляцию.
+
+## WebSocket MVP flow
+
+Первый клиент создаёт комнату:
+
+```json
+{ "type": "create_room" }
+```
+
+Сервер отвечает `room_created` с `room_code`, назначенным `player_1` и начальным `snapshot`.
+
+Второй клиент подключается к комнате:
+
+```json
+{ "type": "join_room", "room_code": "ABCD12" }
+```
+
+Сервер назначает `player_2`, отправляет второму клиенту `joined`, а первому — `player_joined`.
+
+Игровое действие отправляется через typed envelope:
+
+```json
+{
+  "type": "action",
+  "action": {
+    "type": "place_node",
+    "player": "player_1",
+    "cell": { "q": -2, "r": 0 }
+  }
+}
+```
+
+После принятого действия сервер применяет правила и рассылает обоим игрокам полный `snapshot`. Некорректные действия возвращают `error` только отправителю.
+
 ## Документация
 
 - [MVP](docs/mvp.md) — ближайшая реализуемая версия правил и критерии готовности.
 - [GDD](docs/gdd.md) — дизайн-направление игры, долгосрочная модель и будущие расширения.
+- [Protocol](docs/protocol.md) — сетевой формат `Action` и `Snapshot`.
 
 ## Текущий статус
 
-Выполнена начальная настройка репозитория. Godot-проект находится в `game/`; серверная часть будет разрабатываться в `server/`.
+Godot-проект находится в `game/`. В `server/` есть первый авторитетный WebSocket MVP: room code, два игрока, назначение `player_1`/`player_2`, приём action, проверка текущего игрока, TypeScript-порт `MatchState` и broadcast snapshot.
