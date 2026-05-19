@@ -81,6 +81,33 @@ func setup_match() -> void:
 	_update_active_nodes()
 
 
+func to_snapshot() -> Dictionary:
+	return {
+		"players": [
+			GameDefs.PLAYER_ONE,
+			GameDefs.PLAYER_TWO,
+		],
+		"current_player": current_player,
+		"turn": turn_number,
+		"round": round_number,
+		"core_hp": {
+			GameDefs.PLAYER_ONE: int(core_hp.get(GameDefs.PLAYER_ONE, 0)),
+			GameDefs.PLAYER_TWO: int(core_hp.get(GameDefs.PLAYER_TWO, 0)),
+		},
+		"resources": {
+			GameDefs.PLAYER_ONE: int(resources.get(GameDefs.PLAYER_ONE, 0)),
+			GameDefs.PLAYER_TWO: int(resources.get(GameDefs.PLAYER_TWO, 0)),
+		},
+		"action_limits": {
+			"connection_actions_left": connection_actions_left,
+			"repair_actions_left": repair_actions_left,
+		},
+		"objects": _objects_to_snapshot(),
+		"finished": finished,
+		"status_message": status_message,
+	}
+
+
 func apply_action(raw_action: Variant) -> Dictionary:
 	var action := _parse_action(raw_action)
 
@@ -1514,10 +1541,60 @@ func _parse_action(raw_action: Variant) -> GameAction:
 	return GameAction.new()
 
 
+func _cell_to_payload(cell: Vector2i) -> Dictionary:
+	return {
+		GameAction.KEY_CELL_Q: cell.x,
+		GameAction.KEY_CELL_R: cell.y,
+	}
+
+
+func _objects_to_snapshot() -> Array[Dictionary]:
+	var object_snapshots: Array[Dictionary] = []
+
+	for key in objects.keys():
+		object_snapshots.append(_object_to_snapshot(objects[key]))
+
+	object_snapshots.sort_custom(func(first: Dictionary, second: Dictionary) -> bool:
+		var first_cell: Dictionary = first["cell"]
+		var second_cell: Dictionary = second["cell"]
+		var first_q := int(first_cell[GameAction.KEY_CELL_Q])
+		var second_q := int(second_cell[GameAction.KEY_CELL_Q])
+
+		if first_q == second_q:
+			return int(first_cell[GameAction.KEY_CELL_R]) < int(second_cell[GameAction.KEY_CELL_R])
+
+		return first_q < second_q
+	)
+
+	return object_snapshots
+
+
+func _object_to_snapshot(object: Dictionary) -> Dictionary:
+	var object_type := str(object.get("type", ""))
+	var snapshot := {
+		"cell": _cell_to_payload(object.get("cell", Vector2i.ZERO)),
+		"type": object_type,
+		"owner": str(object.get("owner", "")),
+		"active": bool(object.get("active", false)),
+		"disabled": bool(object.get("disabled", false)),
+	}
+
+	if object_type == OBJECT_NODE:
+		snapshot["role"] = str(object.get("role", NODE_CONDUIT))
+		snapshot["ready"] = bool(object.get("ready", false))
+		snapshot["action_charges"] = int(object.get("action_charges", 0))
+	elif object_type == OBJECT_MODULE:
+		snapshot["module_kind"] = str(object.get("module_kind", ""))
+		snapshot["ready"] = bool(object.get("ready", false))
+
+	return snapshot
+
+
 func _result(ok: bool, message: String, action: GameAction = null) -> Dictionary:
 	var result := {
 		"ok": ok,
 		"message": message,
+		"snapshot": to_snapshot(),
 	}
 
 	if action != null:
