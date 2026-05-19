@@ -11,6 +11,7 @@ var match_state: MatchState
 var hover_cell := HOVER_NONE
 var selected_action_type := GameAction.TYPE_PLACE_NODE
 var striker_attack_source := HOVER_NONE
+var hacker_hack_source := HOVER_NONE
 
 
 func _ready() -> void:
@@ -38,6 +39,14 @@ func set_striker_attack_source(cell: Vector2i) -> void:
 		return
 
 	striker_attack_source = cell
+	queue_redraw()
+
+
+func set_hacker_hack_source(cell: Vector2i) -> void:
+	if cell == hacker_hack_source:
+		return
+
+	hacker_hack_source = cell
 	queue_redraw()
 
 
@@ -181,6 +190,9 @@ func _draw_objects() -> void:
 		if _is_selected_striker_source(cell):
 			draw_arc(center, 30.0, 0.0, TAU, 48, _warning_color().lightened(0.18), 3.2, true)
 
+		if _is_selected_hacker_source(cell):
+			draw_arc(center, 30.0, 0.0, TAU, 48, _hack_color().lightened(0.18), 3.2, true)
+
 
 func _draw_module_object(center: Vector2, object: Dictionary, owner_color: Color, is_disabled: bool) -> void:
 	var fill := _object_fill_color(owner_color, object, is_disabled)
@@ -214,6 +226,12 @@ func _draw_node_object(center: Vector2, object: Dictionary, owner_color: Color, 
 
 	if _is_ready_striker(object):
 		draw_arc(center, 21.5, 0.0, TAU, 48, _warning_color().lightened(0.12), 2.2, true)
+
+	if _is_ready_hacker(object):
+		draw_arc(center, 21.5, 0.0, TAU, 48, _hack_color().lightened(0.12), 2.2, true)
+
+	if _is_ready_defender(object):
+		draw_arc(center, 21.5, 0.0, TAU, 48, _defender_color().lightened(0.12), 2.2, true)
 
 
 func _draw_hex(center: Vector2, radius: float, fill: Color, outline: Color, width: float) -> void:
@@ -249,6 +267,9 @@ func _target_color() -> Color:
 	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
 		return _warning_color()
 
+	if selected_action_type == GameAction.TYPE_HACKER_HACK:
+		return _hack_color()
+
 	if selected_action_type == GameAction.TYPE_REPAIR_NODE:
 		return Color(0.48, 0.78, 0.38)
 
@@ -263,6 +284,12 @@ func _target_color() -> Color:
 
 	if selected_action_type == GameAction.TYPE_UPGRADE_STRIKER:
 		return _warning_color()
+
+	if selected_action_type == GameAction.TYPE_UPGRADE_DEFENDER:
+		return _defender_color()
+
+	if selected_action_type == GameAction.TYPE_UPGRADE_HACKER:
+		return _hack_color()
 
 	return GameDefs.player_color(match_state.current_player)
 
@@ -330,6 +357,17 @@ func _draw_node_role_mark(center: Vector2, role: String, is_active: bool) -> voi
 		warning_color.a = alpha
 		draw_arc(center, 10.5, 0.0, TAU, 36, warning_color, 2.8, true)
 		draw_line(center + Vector2(-5.0, 4.0), center + Vector2(5.0, -4.0), warning_color, 2.2, true)
+	elif role == MatchState.NODE_DEFENDER:
+		var defender_color := _defender_color()
+		defender_color.a = alpha
+		_draw_hex_outline(center, 10.5, defender_color, 2.6)
+		draw_line(center + Vector2(0.0, -6.0), center + Vector2(0.0, 6.0), defender_color, 2.0, true)
+	elif role == MatchState.NODE_HACKER:
+		var hack_color := _hack_color()
+		hack_color.a = alpha
+		draw_arc(center, 10.5, -PI * 0.35, PI * 0.35, 18, hack_color, 2.6, true)
+		draw_arc(center, 10.5, PI * 0.65, PI * 1.35, 18, hack_color, 2.6, true)
+		draw_line(center + Vector2(-4.0, 4.5), center + Vector2(4.0, -4.5), hack_color, 2.0, true)
 
 
 func _draw_module_kind_mark(center: Vector2, module_kind: String, is_active: bool) -> void:
@@ -389,12 +427,23 @@ func _warning_color() -> Color:
 	return Color(1.0, 0.72, 0.24)
 
 
+func _defender_color() -> Color:
+	return Color(0.42, 0.76, 1.0)
+
+
+func _hack_color() -> Color:
+	return Color(0.25, 0.92, 0.82)
+
+
 func _is_valid_target(cell: Vector2i) -> bool:
 	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
 		return striker_attack_source != HOVER_NONE and match_state.can_striker_attack(striker_attack_source, cell)
 
+	if selected_action_type == GameAction.TYPE_HACKER_HACK:
+		return hacker_hack_source != HOVER_NONE and match_state.can_hacker_hack(hacker_hack_source, cell)
+
 	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
-		return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell)
+		return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_DEFENDER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_HACKER, cell)
 
 	if selected_action_type == GameHud.ACTION_BUILD_MODULE:
 		return match_state.can_target_action(GameAction.TYPE_BUILD_CONNECTION_MODULE, cell) or match_state.can_target_action(GameAction.TYPE_BUILD_REPAIR_MODULE, cell)
@@ -406,11 +455,27 @@ func _is_selected_striker_source(cell: Vector2i) -> bool:
 	return selected_action_type == GameAction.TYPE_STRIKER_ATTACK and cell == striker_attack_source
 
 
+func _is_selected_hacker_source(cell: Vector2i) -> bool:
+	return selected_action_type == GameAction.TYPE_HACKER_HACK and cell == hacker_hack_source
+
+
 func _is_ready_striker(object: Dictionary) -> bool:
+	return _is_ready_role(object, MatchState.NODE_STRIKER)
+
+
+func _is_ready_hacker(object: Dictionary) -> bool:
+	return _is_ready_role(object, MatchState.NODE_HACKER)
+
+
+func _is_ready_defender(object: Dictionary) -> bool:
+	return _is_ready_role(object, MatchState.NODE_DEFENDER)
+
+
+func _is_ready_role(object: Dictionary, role: String) -> bool:
 	if object.get("type") != MatchState.OBJECT_NODE:
 		return false
 
-	if object.get("role", MatchState.NODE_CONDUIT) != MatchState.NODE_STRIKER:
+	if object.get("role", MatchState.NODE_CONDUIT) != role:
 		return false
 
 	if object.get("disabled", false):

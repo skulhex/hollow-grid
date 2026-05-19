@@ -8,11 +8,14 @@ const OBJECT_MODULE := "module"
 const NODE_CONDUIT := "conduit"
 const NODE_HARVESTER := "harvester"
 const NODE_STRIKER := "striker"
+const NODE_DEFENDER := "defender"
+const NODE_HACKER := "hacker"
 
 const MODULE_CONNECTION := "connection"
 const MODULE_REPAIR := "repair"
 
 const CONTROL_POINT := Vector2i(0, 0)
+const INVALID_CELL := Vector2i(999, 999)
 
 const START_CORE_HP := 5
 const START_RESOURCE := 1
@@ -22,6 +25,8 @@ const NODE_ROLE_ACTION_CHARGES_PER_TURN := 1
 const HARVESTER_RESOURCE_GAIN := 1
 const HARVESTER_UPGRADE_RESOURCE_COST := 1
 const STRIKER_UPGRADE_RESOURCE_COST := 1
+const DEFENDER_UPGRADE_RESOURCE_COST := 1
+const HACKER_UPGRADE_RESOURCE_COST := 1
 const MODULE_BUILD_RESOURCE_COST := 5
 const STRIKER_CORE_DAMAGE := 1
 
@@ -106,12 +111,18 @@ func apply_action(raw_action: Variant) -> Dictionary:
 			return _apply_upgrade_node(action, NODE_HARVESTER)
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return _apply_upgrade_node(action, NODE_STRIKER)
+		GameAction.TYPE_UPGRADE_DEFENDER:
+			return _apply_upgrade_node(action, NODE_DEFENDER)
+		GameAction.TYPE_UPGRADE_HACKER:
+			return _apply_upgrade_node(action, NODE_HACKER)
 		GameAction.TYPE_BUILD_CONNECTION_MODULE:
 			return _apply_build_module(action, MODULE_CONNECTION)
 		GameAction.TYPE_BUILD_REPAIR_MODULE:
 			return _apply_build_module(action, MODULE_REPAIR)
 		GameAction.TYPE_STRIKER_ATTACK:
 			return _apply_striker_attack(action)
+		GameAction.TYPE_HACKER_HACK:
+			return _apply_hacker_hack(action)
 		GameAction.TYPE_SKIP:
 			return _apply_skip(action)
 		_:
@@ -143,6 +154,14 @@ func upgrade_striker(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.upgrade_striker(current_player, cell))
 
 
+func upgrade_defender(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.upgrade_defender(current_player, cell))
+
+
+func upgrade_hacker(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.upgrade_hacker(current_player, cell))
+
+
 func build_connection_module(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.build_connection_module(current_player, cell))
 
@@ -153,6 +172,10 @@ func build_repair_module(cell: Vector2i) -> Dictionary:
 
 func striker_attack(source_cell: Vector2i, cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.striker_attack(current_player, source_cell, cell))
+
+
+func hacker_hack(source_cell: Vector2i, cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.hacker_hack(current_player, source_cell, cell))
 
 
 func skip_turn() -> Dictionary:
@@ -244,8 +267,16 @@ func can_select_striker_source(cell: Vector2i) -> bool:
 	return _can_select_striker_source(current_player, cell)
 
 
+func can_select_hacker_source(cell: Vector2i) -> bool:
+	return _can_select_hacker_source(current_player, cell)
+
+
 func striker_source_status_message(cell: Vector2i) -> String:
 	return _striker_source_status_message(current_player, cell)
+
+
+func hacker_source_status_message(cell: Vector2i) -> String:
+	return _hacker_source_status_message(current_player, cell)
 
 
 func role_node_charge_preview(player: String) -> int:
@@ -264,6 +295,10 @@ func upkeep_preview(player: String) -> Dictionary:
 
 func can_striker_attack(source_cell: Vector2i, target_cell: Vector2i) -> bool:
 	return _can_striker_attack(current_player, source_cell, target_cell)
+
+
+func can_hacker_hack(source_cell: Vector2i, target_cell: Vector2i) -> bool:
+	return _can_hacker_hack(current_player, source_cell, target_cell)
 
 
 func can_target_action(action_type: String, cell: Vector2i) -> bool:
@@ -286,7 +321,7 @@ func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 			return can_break_node(cell)
 		GameAction.TYPE_CLEAR_NODE:
 			return can_clear_node(cell)
-		GameAction.TYPE_UPGRADE_HARVESTER, GameAction.TYPE_UPGRADE_STRIKER:
+		GameAction.TYPE_UPGRADE_HARVESTER, GameAction.TYPE_UPGRADE_STRIKER, GameAction.TYPE_UPGRADE_DEFENDER, GameAction.TYPE_UPGRADE_HACKER:
 			return can_upgrade_node(cell)
 		GameAction.TYPE_BUILD_CONNECTION_MODULE, GameAction.TYPE_BUILD_REPAIR_MODULE:
 			return can_build_module(cell)
@@ -326,6 +361,10 @@ func action_resource_cost(action_type: String) -> int:
 			return HARVESTER_UPGRADE_RESOURCE_COST
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return STRIKER_UPGRADE_RESOURCE_COST
+		GameAction.TYPE_UPGRADE_DEFENDER:
+			return DEFENDER_UPGRADE_RESOURCE_COST
+		GameAction.TYPE_UPGRADE_HACKER:
+			return HACKER_UPGRADE_RESOURCE_COST
 		GameAction.TYPE_BUILD_CONNECTION_MODULE, GameAction.TYPE_BUILD_REPAIR_MODULE:
 			return MODULE_BUILD_RESOURCE_COST
 
@@ -340,6 +379,8 @@ func action_uses_resource(action_type: String) -> bool:
 	return action_type in [
 		GameAction.TYPE_UPGRADE_HARVESTER,
 		GameAction.TYPE_UPGRADE_STRIKER,
+		GameAction.TYPE_UPGRADE_DEFENDER,
+		GameAction.TYPE_UPGRADE_HACKER,
 		GameAction.TYPE_BUILD_CONNECTION_MODULE,
 		GameAction.TYPE_BUILD_REPAIR_MODULE,
 	]
@@ -618,6 +659,13 @@ func _apply_striker_attack(action: GameAction) -> Dictionary:
 
 	var target := get_object(action.cell)
 	var target_type: String = target.get("type", "")
+	var defender_cell := _blocking_defender_cell(current_player, action.cell)
+
+	if defender_cell != INVALID_CELL:
+		objects[cell_key(action.source_cell)]["action_charges"] = 0
+		objects[cell_key(defender_cell)]["action_charges"] = 0
+		_complete_successful_action(action, "%s Defender blocked a Striker attack" % GameDefs.player_label(target.get("owner", "")))
+		return _result(true, status_message, action)
 
 	if target_type == OBJECT_NODE or target_type == OBJECT_MODULE:
 		objects[cell_key(action.cell)]["disabled"] = true
@@ -641,6 +689,22 @@ func _apply_striker_attack(action: GameAction) -> Dictionary:
 
 	status_message = "%s cannot strike that target" % GameDefs.player_label(current_player)
 	return _result(false, status_message, action)
+
+
+func _apply_hacker_hack(action: GameAction) -> Dictionary:
+	if not _can_hacker_hack(current_player, action.source_cell, action.cell):
+		status_message = _hacker_hack_status_message(current_player, action.source_cell, action.cell)
+		return _result(false, status_message, action)
+
+	var target_key := cell_key(action.cell)
+	objects[target_key]["owner"] = current_player
+	objects[target_key]["disabled"] = true
+	objects[target_key]["active"] = false
+	objects[target_key]["ready"] = false
+	objects[target_key]["action_charges"] = 0
+	objects[cell_key(action.source_cell)]["action_charges"] = 0
+	_complete_successful_action(action, "%s Hacker took control of a disabled Node" % GameDefs.player_label(current_player))
+	return _result(true, status_message, action)
 
 
 func _apply_skip(action: GameAction) -> Dictionary:
@@ -879,6 +943,36 @@ func _can_select_striker_source(player: String, cell: Vector2i) -> bool:
 	return int(object.get("action_charges", 0)) > 0
 
 
+func _can_select_hacker_source(player: String, cell: Vector2i) -> bool:
+	if not contains_cell(cell):
+		return false
+
+	var object := get_object(cell)
+
+	if object.is_empty():
+		return false
+
+	if object.get("type") != OBJECT_NODE:
+		return false
+
+	if object.get("owner") != player:
+		return false
+
+	if object.get("role", NODE_CONDUIT) != NODE_HACKER:
+		return false
+
+	if object.get("disabled", false):
+		return false
+
+	if not object.get("active", false):
+		return false
+
+	if not object.get("ready", false):
+		return false
+
+	return int(object.get("action_charges", 0)) > 0
+
+
 func _striker_source_status_message(player: String, cell: Vector2i) -> String:
 	var object := get_object(cell)
 
@@ -898,6 +992,27 @@ func _striker_source_status_message(player: String, cell: Vector2i) -> String:
 		return "%s Striker has no charge" % GameDefs.player_label(player)
 
 	return "%s Striker ready" % GameDefs.player_label(player)
+
+
+func _hacker_source_status_message(player: String, cell: Vector2i) -> String:
+	var object := get_object(cell)
+
+	if object.is_empty() or object.get("type") != OBJECT_NODE or object.get("owner") != player or object.get("role", NODE_CONDUIT) != NODE_HACKER:
+		return "Select your ready Hacker to hack"
+
+	if object.get("disabled", false):
+		return "%s Hacker is disabled" % GameDefs.player_label(player)
+
+	if not object.get("active", false):
+		return "%s Hacker is inactive" % GameDefs.player_label(player)
+
+	if not object.get("ready", false):
+		return "%s Hacker is not ready" % GameDefs.player_label(player)
+
+	if int(object.get("action_charges", 0)) <= 0:
+		return "%s Hacker has no charge" % GameDefs.player_label(player)
+
+	return "%s Hacker ready" % GameDefs.player_label(player)
 
 
 func _can_striker_attack(player: String, source_cell: Vector2i, target_cell: Vector2i) -> bool:
@@ -932,6 +1047,33 @@ func _can_striker_attack(player: String, source_cell: Vector2i, target_cell: Vec
 			return false
 
 
+func _can_hacker_hack(player: String, source_cell: Vector2i, target_cell: Vector2i) -> bool:
+	if not _can_select_hacker_source(player, source_cell):
+		return false
+
+	if not contains_cell(target_cell):
+		return false
+
+	if source_cell == target_cell:
+		return false
+
+	if not _are_neighbors(source_cell, target_cell):
+		return false
+
+	var target := get_object(target_cell)
+
+	if target.is_empty():
+		return false
+
+	if target.get("owner") == player:
+		return false
+
+	if target.get("type") != OBJECT_NODE:
+		return false
+
+	return target.get("disabled", false)
+
+
 func _striker_attack_status_message(player: String, source_cell: Vector2i, target_cell: Vector2i) -> String:
 	if not _can_select_striker_source(player, source_cell):
 		return _striker_source_status_message(player, source_cell)
@@ -957,6 +1099,79 @@ func _striker_attack_status_message(player: String, source_cell: Vector2i, targe
 		return "%s Striker target module is inactive" % GameDefs.player_label(player)
 
 	return "%s cannot strike that target" % GameDefs.player_label(player)
+
+
+func _hacker_hack_status_message(player: String, source_cell: Vector2i, target_cell: Vector2i) -> String:
+	if not _can_select_hacker_source(player, source_cell):
+		return _hacker_source_status_message(player, source_cell)
+
+	if not contains_cell(target_cell):
+		return "%s Hacker target is outside the board" % GameDefs.player_label(player)
+
+	if not _are_neighbors(source_cell, target_cell):
+		return "%s Hacker can only hack adjacent targets" % GameDefs.player_label(player)
+
+	var target := get_object(target_cell)
+
+	if target.is_empty():
+		return "%s Hacker needs a disabled enemy Node" % GameDefs.player_label(player)
+
+	if target.get("owner") == player:
+		return "%s Hacker cannot target friendly nodes" % GameDefs.player_label(player)
+
+	if target.get("type") != OBJECT_NODE:
+		return "%s Hacker can only target Nodes" % GameDefs.player_label(player)
+
+	if not target.get("disabled", false):
+		return "%s Hacker target must be disabled" % GameDefs.player_label(player)
+
+	return "%s cannot hack that target" % GameDefs.player_label(player)
+
+
+func _blocking_defender_cell(attacker: String, target_cell: Vector2i) -> Vector2i:
+	var target := get_object(target_cell)
+
+	if target.is_empty():
+		return INVALID_CELL
+
+	var target_owner: String = target.get("owner", "")
+
+	if target_owner.is_empty() or target_owner == attacker:
+		return INVALID_CELL
+
+	for direction in HexGrid.DIRECTIONS:
+		var defender_cell := target_cell + direction
+
+		if defender_cell == target_cell:
+			continue
+
+		var defender := get_object(defender_cell)
+
+		if defender.is_empty():
+			continue
+
+		if defender.get("type") != OBJECT_NODE:
+			continue
+
+		if defender.get("owner") != target_owner:
+			continue
+
+		if defender.get("role", NODE_CONDUIT) != NODE_DEFENDER:
+			continue
+
+		if defender.get("disabled", false):
+			continue
+
+		if not defender.get("active", false):
+			continue
+
+		if not defender.get("ready", false):
+			continue
+
+		if int(defender.get("action_charges", 0)) > 0:
+			return defender_cell
+
+	return INVALID_CELL
 
 
 func _are_neighbors(first_cell: Vector2i, second_cell: Vector2i) -> bool:
@@ -1235,12 +1450,18 @@ func _action_verb(action_type: String) -> String:
 			return "upgrade a Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "upgrade a Striker"
+		GameAction.TYPE_UPGRADE_DEFENDER:
+			return "upgrade a Defender"
+		GameAction.TYPE_UPGRADE_HACKER:
+			return "upgrade a Hacker"
 		GameAction.TYPE_BUILD_CONNECTION_MODULE:
 			return "build a Connection Module"
 		GameAction.TYPE_BUILD_REPAIR_MODULE:
 			return "build a Repair Module"
 		GameAction.TYPE_STRIKER_ATTACK:
 			return "strike"
+		GameAction.TYPE_HACKER_HACK:
+			return "hack"
 		GameAction.TYPE_SKIP:
 			return "skip"
 		_:
@@ -1253,6 +1474,10 @@ func _node_role_label(role: String) -> String:
 			return "Harvester"
 		NODE_STRIKER:
 			return "Striker"
+		NODE_DEFENDER:
+			return "Defender"
+		NODE_HACKER:
+			return "Hacker"
 		_:
 			return "Conduit"
 

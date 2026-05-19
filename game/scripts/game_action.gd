@@ -7,9 +7,12 @@ const TYPE_BREAK_NODE := "break_node"
 const TYPE_CLEAR_NODE := "clear_node"
 const TYPE_UPGRADE_HARVESTER := "upgrade_harvester"
 const TYPE_UPGRADE_STRIKER := "upgrade_striker"
+const TYPE_UPGRADE_DEFENDER := "upgrade_defender"
+const TYPE_UPGRADE_HACKER := "upgrade_hacker"
 const TYPE_BUILD_CONNECTION_MODULE := "build_connection_module"
 const TYPE_BUILD_REPAIR_MODULE := "build_repair_module"
 const TYPE_STRIKER_ATTACK := "striker_attack"
+const TYPE_HACKER_HACK := "hacker_hack"
 const TYPE_SKIP := "skip"
 
 const KEY_TYPE := "type"
@@ -61,6 +64,14 @@ static func upgrade_striker(action_player: String, action_cell: Vector2i) -> Gam
 	return GameAction.new(TYPE_UPGRADE_STRIKER, action_player, action_cell, true)
 
 
+static func upgrade_defender(action_player: String, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_UPGRADE_DEFENDER, action_player, action_cell, true)
+
+
+static func upgrade_hacker(action_player: String, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_UPGRADE_HACKER, action_player, action_cell, true)
+
+
 static func build_connection_module(action_player: String, action_cell: Vector2i) -> GameAction:
 	return GameAction.new(TYPE_BUILD_CONNECTION_MODULE, action_player, action_cell, true)
 
@@ -71,6 +82,10 @@ static func build_repair_module(action_player: String, action_cell: Vector2i) ->
 
 static func striker_attack(action_player: String, action_source_cell: Vector2i, action_cell: Vector2i) -> GameAction:
 	return GameAction.new(TYPE_STRIKER_ATTACK, action_player, action_cell, true, action_source_cell, true)
+
+
+static func hacker_hack(action_player: String, action_source_cell: Vector2i, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_HACKER_HACK, action_player, action_cell, true, action_source_cell, true)
 
 
 static func skip(action_player: String) -> GameAction:
@@ -137,7 +152,7 @@ func is_valid_shape() -> bool:
 	if action_type == TYPE_SKIP:
 		return not has_cell and not has_source_cell
 
-	if action_type == TYPE_STRIKER_ATTACK:
+	if action_type == TYPE_STRIKER_ATTACK or action_type == TYPE_HACKER_HACK:
 		return has_cell and has_source_cell
 
 	return action_type in [
@@ -147,6 +162,8 @@ func is_valid_shape() -> bool:
 		TYPE_CLEAR_NODE,
 		TYPE_UPGRADE_HARVESTER,
 		TYPE_UPGRADE_STRIKER,
+		TYPE_UPGRADE_DEFENDER,
+		TYPE_UPGRADE_HACKER,
 		TYPE_BUILD_CONNECTION_MODULE,
 		TYPE_BUILD_REPAIR_MODULE,
 	] and has_cell and not has_source_cell

@@ -11,8 +11,10 @@ const ACTION_UPGRADE_NODE := "upgrade_node"
 const ACTION_BUILD_MODULE := "build_module"
 const MENU_HARVESTER := 1
 const MENU_STRIKER := 2
-const MENU_CONNECTION_MODULE := 3
-const MENU_REPAIR_MODULE := 4
+const MENU_DEFENDER := 3
+const MENU_HACKER := 4
+const MENU_CONNECTION_MODULE := 5
+const MENU_REPAIR_MODULE := 6
 
 @onready var status_panel: PanelContainer = $Root/StatusPanel
 @onready var command_panel: PanelContainer = $Root/CommandPanel
@@ -65,7 +67,7 @@ func _ready() -> void:
 	module_button.tooltip_text = "Build a connected module"
 
 
-func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hover_cell: Vector2i = BoardView.HOVER_NONE) -> void:
+func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE, hover_cell: Vector2i = BoardView.HOVER_NONE) -> void:
 	current_selected_action_type = selected_action_type
 	turn_label.text = GameDefs.player_label(match_state.current_player)
 	turn_label.add_theme_color_override("font_color", GameDefs.player_color(match_state.current_player))
@@ -83,7 +85,7 @@ func refresh(match_state: MatchState, selected_action_type: String, striker_atta
 		match_state.resources[GameDefs.PLAYER_TWO],
 	]
 	preview_label.text = _format_next_turn_preview(match_state)
-	selected_label.text = "Selected: %s" % _action_label(selected_action_type, striker_attack_source)
+	selected_label.text = "Selected: %s" % _action_label(selected_action_type, striker_attack_source, hacker_hack_source)
 	status_label.text = match_state.status_message
 
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
@@ -104,6 +106,8 @@ func show_upgrade_menu(screen_position: Vector2, target_cell: Vector2i) -> void:
 	upgrade_popup.clear()
 	upgrade_popup.add_item("Harvester (%dR)" % MatchState.HARVESTER_UPGRADE_RESOURCE_COST, MENU_HARVESTER)
 	upgrade_popup.add_item("Striker (%dR)" % MatchState.STRIKER_UPGRADE_RESOURCE_COST, MENU_STRIKER)
+	upgrade_popup.add_item("Defender (%dR)" % MatchState.DEFENDER_UPGRADE_RESOURCE_COST, MENU_DEFENDER)
+	upgrade_popup.add_item("Hacker (%dR)" % MatchState.HACKER_UPGRADE_RESOURCE_COST, MENU_HACKER)
 	upgrade_button.button_pressed = current_selected_action_type == ACTION_UPGRADE_NODE
 	upgrade_popup.position = Vector2i(int(screen_position.x), int(screen_position.y))
 	upgrade_popup.popup()
@@ -192,6 +196,12 @@ func _possible_actions_text(match_state: MatchState, cell: Vector2i) -> String:
 	if match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell):
 		actions.append("Upgrade Striker")
 
+	if match_state.can_target_action(GameAction.TYPE_UPGRADE_DEFENDER, cell):
+		actions.append("Upgrade Defender")
+
+	if match_state.can_target_action(GameAction.TYPE_UPGRADE_HACKER, cell):
+		actions.append("Upgrade Hacker")
+
 	if match_state.can_target_action(GameAction.TYPE_BUILD_CONNECTION_MODULE, cell):
 		actions.append("Build Connection Module")
 
@@ -200,6 +210,9 @@ func _possible_actions_text(match_state: MatchState, cell: Vector2i) -> String:
 
 	if match_state.can_select_striker_source(cell):
 		actions.append("Striker Attack")
+
+	if match_state.can_select_hacker_source(cell):
+		actions.append("Hacker Hack")
 
 	if actions.is_empty():
 		return "-"
@@ -216,7 +229,7 @@ func _player_has_upgrade_option(match_state: MatchState) -> bool:
 
 		var cell: Vector2i = object.get("cell", BoardView.HOVER_NONE)
 
-		if match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell):
+		if match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_DEFENDER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_HACKER, cell):
 			return true
 
 	return false
@@ -422,6 +435,10 @@ func _on_upgrade_menu_id_pressed(id: int) -> void:
 			upgrade_role_selected.emit(GameAction.TYPE_UPGRADE_HARVESTER, upgrade_target_cell)
 		MENU_STRIKER:
 			upgrade_role_selected.emit(GameAction.TYPE_UPGRADE_STRIKER, upgrade_target_cell)
+		MENU_DEFENDER:
+			upgrade_role_selected.emit(GameAction.TYPE_UPGRADE_DEFENDER, upgrade_target_cell)
+		MENU_HACKER:
+			upgrade_role_selected.emit(GameAction.TYPE_UPGRADE_HACKER, upgrade_target_cell)
 		MENU_CONNECTION_MODULE:
 			module_kind_selected.emit(GameAction.TYPE_BUILD_CONNECTION_MODULE, module_target_cell)
 		MENU_REPAIR_MODULE:
@@ -436,7 +453,7 @@ func _on_restart_pressed() -> void:
 	restart_requested.emit()
 
 
-func _action_label(action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE) -> String:
+func _action_label(action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
 			return "Build connection"
@@ -450,6 +467,10 @@ func _action_label(action_type: String, striker_attack_source: Vector2i = BoardV
 			return "Upgrade node: Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Upgrade node: Striker"
+		GameAction.TYPE_UPGRADE_DEFENDER:
+			return "Upgrade node: Defender"
+		GameAction.TYPE_UPGRADE_HACKER:
+			return "Upgrade node: Hacker"
 		GameAction.TYPE_BUILD_CONNECTION_MODULE:
 			return "Build module: Connection"
 		GameAction.TYPE_BUILD_REPAIR_MODULE:
@@ -459,5 +480,10 @@ func _action_label(action_type: String, striker_attack_source: Vector2i = BoardV
 				return "Striker Attack (%d, %d)" % [striker_attack_source.x, striker_attack_source.y]
 
 			return "Striker Attack"
+		GameAction.TYPE_HACKER_HACK:
+			if hacker_hack_source != BoardView.HOVER_NONE:
+				return "Hacker Hack (%d, %d)" % [hacker_hack_source.x, hacker_hack_source.y]
+
+			return "Hacker Hack"
 		_:
 			return action_type

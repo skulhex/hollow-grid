@@ -11,6 +11,7 @@ var grid: HexGrid
 var match_state: MatchState
 var selected_action_type := DEFAULT_ACTION_TYPE
 var selected_striker_source := BoardView.HOVER_NONE
+var selected_hacker_source := BoardView.HOVER_NONE
 
 
 func _ready() -> void:
@@ -26,6 +27,7 @@ func _ready() -> void:
 	board_view.setup(grid, match_state)
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
+	board_view.set_hacker_hack_source(selected_hacker_source)
 	_refresh()
 
 
@@ -76,6 +78,9 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 	if selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
 		return _submit_striker_attack_target(cell)
 
+	if selected_action_type == GameAction.TYPE_HACKER_HACK:
+		return _submit_hacker_hack_target(cell)
+
 	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
 		return _open_upgrade_role_menu(cell)
 
@@ -84,6 +89,9 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 
 	if selected_action_type == DEFAULT_ACTION_TYPE and _cell_has_current_player_striker(cell):
 		return _try_select_striker_source(cell)
+
+	if selected_action_type == DEFAULT_ACTION_TYPE and _cell_has_current_player_hacker(cell):
+		return _try_select_hacker_source(cell)
 
 	if not match_state.can_target_action(selected_action_type, cell):
 		if match_state.can_target_action_shape(selected_action_type, cell) and not match_state.can_afford_target_action(match_state.current_player, selected_action_type, cell):
@@ -143,6 +151,36 @@ func _submit_striker_attack_target(cell: Vector2i) -> Dictionary:
 	return result
 
 
+func _submit_hacker_hack_target(cell: Vector2i) -> Dictionary:
+	if cell == selected_hacker_source:
+		_clear_hacker_hack_mode(true)
+		match_state.status_message = "Hacker hack canceled"
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	if _cell_has_current_player_hacker(cell):
+		return _try_select_hacker_source(cell)
+
+	if not match_state.can_hacker_hack(selected_hacker_source, cell):
+		match_state.status_message = "Select a highlighted target for Hacker Hack"
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	var result := _submit_action(GameAction.hacker_hack(match_state.current_player, selected_hacker_source, cell))
+
+	if bool(result.get("ok", false)):
+		_clear_hacker_hack_mode(true)
+		_refresh()
+
+	return result
+
+
 func _submit_action(action: GameAction) -> Dictionary:
 	var result := match_state.apply_action(action.to_payload())
 	_refresh()
@@ -160,8 +198,10 @@ func _select_action(action_type: String) -> void:
 
 	selected_action_type = action_type
 	selected_striker_source = BoardView.HOVER_NONE
+	selected_hacker_source = BoardView.HOVER_NONE
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
+	board_view.set_hacker_hack_source(selected_hacker_source)
 	_refresh()
 
 
@@ -171,6 +211,10 @@ func _submit_upgrade_role(action_type: String, target_cell: Vector2i) -> void:
 			_submit_action(GameAction.upgrade_harvester(match_state.current_player, target_cell))
 		GameAction.TYPE_UPGRADE_STRIKER:
 			_submit_action(GameAction.upgrade_striker(match_state.current_player, target_cell))
+		GameAction.TYPE_UPGRADE_DEFENDER:
+			_submit_action(GameAction.upgrade_defender(match_state.current_player, target_cell))
+		GameAction.TYPE_UPGRADE_HACKER:
+			_submit_action(GameAction.upgrade_hacker(match_state.current_player, target_cell))
 
 
 func _submit_module_kind(action_type: String, target_cell: Vector2i) -> void:
@@ -186,6 +230,7 @@ func _skip_turn() -> void:
 		return
 
 	_clear_striker_attack_mode(false)
+	_clear_hacker_hack_mode(false)
 	_submit_action(GameAction.skip(match_state.current_player))
 
 
@@ -193,8 +238,10 @@ func _restart_match() -> void:
 	match_state.setup_match()
 	selected_action_type = DEFAULT_ACTION_TYPE
 	selected_striker_source = BoardView.HOVER_NONE
+	selected_hacker_source = BoardView.HOVER_NONE
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
+	board_view.set_hacker_hack_source(selected_hacker_source)
 	board_view.set_hover_cell(BoardView.HOVER_NONE)
 	_refresh()
 
@@ -215,8 +262,9 @@ func _update_hover(mouse_position: Vector2) -> void:
 func _refresh() -> void:
 	board_view.set_selected_action_type(selected_action_type)
 	board_view.set_striker_attack_source(selected_striker_source)
+	board_view.set_hacker_hack_source(selected_hacker_source)
 	board_view.queue_redraw()
-	hud.refresh(match_state, selected_action_type, selected_striker_source, board_view.hover_cell)
+	hud.refresh(match_state, selected_action_type, selected_striker_source, selected_hacker_source, board_view.hover_cell)
 
 
 func _try_select_striker_source(cell: Vector2i) -> Dictionary:
@@ -239,6 +287,7 @@ func _try_select_striker_source(cell: Vector2i) -> Dictionary:
 
 	selected_action_type = GameAction.TYPE_STRIKER_ATTACK
 	selected_striker_source = cell
+	selected_hacker_source = BoardView.HOVER_NONE
 	match_state.status_message = "Select a target for Striker Attack"
 	_refresh()
 	return {
@@ -251,6 +300,42 @@ func _clear_striker_attack_mode(reset_to_default: bool) -> void:
 	selected_striker_source = BoardView.HOVER_NONE
 
 	if reset_to_default and selected_action_type == GameAction.TYPE_STRIKER_ATTACK:
+		selected_action_type = DEFAULT_ACTION_TYPE
+
+
+func _try_select_hacker_source(cell: Vector2i) -> Dictionary:
+	if selected_action_type == GameAction.TYPE_HACKER_HACK and cell == selected_hacker_source:
+		_clear_hacker_hack_mode(true)
+		match_state.status_message = "Hacker hack canceled"
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	if not match_state.can_select_hacker_source(cell):
+		match_state.status_message = match_state.hacker_source_status_message(cell)
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	selected_action_type = GameAction.TYPE_HACKER_HACK
+	selected_hacker_source = cell
+	selected_striker_source = BoardView.HOVER_NONE
+	match_state.status_message = "Select a target for Hacker Hack"
+	_refresh()
+	return {
+		"ok": true,
+		"message": match_state.status_message,
+	}
+
+
+func _clear_hacker_hack_mode(reset_to_default: bool) -> void:
+	selected_hacker_source = BoardView.HOVER_NONE
+
+	if reset_to_default and selected_action_type == GameAction.TYPE_HACKER_HACK:
 		selected_action_type = DEFAULT_ACTION_TYPE
 
 
@@ -267,6 +352,21 @@ func _cell_has_current_player_striker(cell: Vector2i) -> bool:
 		return false
 
 	return object.get("role", MatchState.NODE_CONDUIT) == MatchState.NODE_STRIKER
+
+
+func _cell_has_current_player_hacker(cell: Vector2i) -> bool:
+	var object := match_state.get_object(cell)
+
+	if object.is_empty():
+		return false
+
+	if object.get("type") != MatchState.OBJECT_NODE:
+		return false
+
+	if object.get("owner") != match_state.current_player:
+		return false
+
+	return object.get("role", MatchState.NODE_CONDUIT) == MatchState.NODE_HACKER
 
 
 func _open_upgrade_role_menu(cell: Vector2i) -> Dictionary:
@@ -293,7 +393,7 @@ func _open_upgrade_role_menu(cell: Vector2i) -> Dictionary:
 
 
 func _can_select_upgrade_target(cell: Vector2i) -> bool:
-	return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell)
+	return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_DEFENDER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_HACKER, cell)
 
 
 func _open_module_kind_menu(cell: Vector2i) -> Dictionary:
@@ -337,11 +437,17 @@ func _action_label(action_type: String) -> String:
 			return "Upgrade node: Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Upgrade node: Striker"
+		GameAction.TYPE_UPGRADE_DEFENDER:
+			return "Upgrade node: Defender"
+		GameAction.TYPE_UPGRADE_HACKER:
+			return "Upgrade node: Hacker"
 		GameAction.TYPE_BUILD_CONNECTION_MODULE:
 			return "Build module: Connection"
 		GameAction.TYPE_BUILD_REPAIR_MODULE:
 			return "Build module: Repair"
 		GameAction.TYPE_STRIKER_ATTACK:
 			return "Striker Attack"
+		GameAction.TYPE_HACKER_HACK:
+			return "Hacker Hack"
 		_:
 			return action_type
