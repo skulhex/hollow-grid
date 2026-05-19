@@ -2,6 +2,9 @@ class_name BoardView
 extends Node2D
 
 const HOVER_NONE := Vector2i(999, 999)
+const MODULE_RADIUS := 18.0
+const MODULE_EFFECT_RADIUS := 13.6
+const NODE_RADIUS := 18.0
 
 var grid: HexGrid
 var match_state: MatchState
@@ -159,31 +162,18 @@ func _draw_objects() -> void:
 
 		var center := _cell_to_screen(cell)
 		var object_owner: String = object["owner"]
-		var color := GameDefs.player_color(object_owner)
+		var owner_color := GameDefs.player_color(object_owner)
 		var is_disabled := bool(object.get("disabled", false))
 
 		if object["type"] == MatchState.OBJECT_CORE:
-			_draw_hex(center, 24.0, color, Color(0.95, 0.97, 1.0), 3.0)
+			_draw_hex(center, 24.0, owner_color, Color(0.95, 0.97, 1.0), 3.0)
 			draw_circle(center, 8.0, Color(0.95, 0.97, 1.0))
 
+		elif object["type"] == MatchState.OBJECT_MODULE:
+			_draw_module_object(center, object, owner_color, is_disabled)
+
 		else:
-			if is_disabled:
-				color = _disabled_owner_fill(color)
-			elif not object.get("active", false):
-				color = color.darkened(0.52)
-
-			draw_circle(center, 18.0, color)
-
-			if is_disabled:
-				_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), false)
-				_draw_disabled_overlay(center, GameDefs.player_color(object_owner))
-			else:
-				draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
-				var role_ready := bool(object.get("active", false)) and bool(object.get("ready", false))
-				_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), role_ready)
-
-				if _is_ready_striker(object):
-					draw_arc(center, 21.5, 0.0, TAU, 48, _warning_color().lightened(0.12), 2.2, true)
+			_draw_node_object(center, object, owner_color, is_disabled)
 
 		if _is_valid_target(cell):
 			draw_arc(center, 25.0, 0.0, TAU, 48, _target_color().lightened(0.18), 3.0, true)
@@ -192,18 +182,63 @@ func _draw_objects() -> void:
 			draw_arc(center, 30.0, 0.0, TAU, 48, _warning_color().lightened(0.18), 3.2, true)
 
 
+func _draw_module_object(center: Vector2, object: Dictionary, owner_color: Color, is_disabled: bool) -> void:
+	var fill := _object_fill_color(owner_color, object, is_disabled)
+	var outline := _module_outline_color(is_disabled)
+	var module_kind: String = object.get("module_kind", MatchState.MODULE_CONNECTION)
+	var is_effective := bool(object.get("active", false)) and bool(object.get("ready", false)) and not is_disabled
+
+	_draw_hex(center, MODULE_RADIUS, fill, outline, 2.2)
+
+	if is_effective:
+		_draw_module_effect_indicator(center, _module_kind_color(module_kind))
+
+	_draw_module_kind_mark(center, module_kind, is_effective)
+
+	if is_disabled:
+		_draw_disabled_module_overlay(center)
+
+
+func _draw_node_object(center: Vector2, object: Dictionary, owner_color: Color, is_disabled: bool) -> void:
+	var fill := _object_fill_color(owner_color, object, is_disabled)
+	draw_circle(center, NODE_RADIUS, fill)
+
+	if is_disabled:
+		_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), false)
+		_draw_disabled_overlay(center, owner_color)
+		return
+
+	draw_circle(center, 8.0, Color(0.95, 0.97, 1.0, 0.78 if object.get("active", false) else 0.35))
+	var role_ready := bool(object.get("active", false)) and bool(object.get("ready", false))
+	_draw_node_role_mark(center, object.get("role", MatchState.NODE_CONDUIT), role_ready)
+
+	if _is_ready_striker(object):
+		draw_arc(center, 21.5, 0.0, TAU, 48, _warning_color().lightened(0.12), 2.2, true)
+
+
 func _draw_hex(center: Vector2, radius: float, fill: Color, outline: Color, width: float) -> void:
+	var points := _hex_points(center, radius)
+
+	draw_colored_polygon(points, fill)
+	_draw_hex_outline(center, radius, outline, width)
+
+
+func _draw_hex_outline(center: Vector2, radius: float, color: Color, width: float) -> void:
+	var points := _hex_points(center, radius)
+
+	var outline_points := PackedVector2Array(points)
+	outline_points.append(points[0])
+	draw_polyline(outline_points, color, width, true)
+
+
+func _hex_points(center: Vector2, radius: float) -> PackedVector2Array:
 	var points := PackedVector2Array()
 
 	for i in range(6):
 		var angle := deg_to_rad(60.0 * i)
 		points.append(center + Vector2(cos(angle), sin(angle)) * radius)
 
-	draw_colored_polygon(points, fill)
-
-	var outline_points := PackedVector2Array(points)
-	outline_points.append(points[0])
-	draw_polyline(outline_points, outline, width, true)
+	return points
 
 
 func _cell_to_screen(cell: Vector2i) -> Vector2:
@@ -219,6 +254,9 @@ func _target_color() -> Color:
 
 	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
 		return _resource_color().lerp(_warning_color(), 0.45)
+
+	if selected_action_type == GameHud.ACTION_BUILD_MODULE:
+		return _module_color()
 
 	if selected_action_type == GameAction.TYPE_UPGRADE_HARVESTER:
 		return _resource_color()
@@ -237,6 +275,22 @@ func _disabled_owner_fill(owner_color: Color) -> Color:
 	return owner_color.darkened(0.42).lerp(Color(0.13, 0.145, 0.165), 0.24)
 
 
+func _object_fill_color(owner_color: Color, object: Dictionary, is_disabled: bool) -> Color:
+	if is_disabled:
+		return _disabled_owner_fill(owner_color)
+
+	if not object.get("active", false):
+		return owner_color.darkened(0.52)
+
+	return owner_color
+
+
+func _module_outline_color(is_disabled: bool) -> Color:
+	var outline := Color(0.9, 0.92, 0.96)
+	outline.a = 0.82 if not is_disabled else 0.36
+	return outline
+
+
 func _draw_disabled_overlay(center: Vector2, owner_color: Color) -> void:
 	var owner_outline := owner_color.lightened(0.16)
 	var disabled_shadow := Color(0.05, 0.06, 0.075, 0.58)
@@ -248,6 +302,20 @@ func _draw_disabled_overlay(center: Vector2, owner_color: Color) -> void:
 	draw_line(center + Vector2(cross_size, -cross_size), center + Vector2(-cross_size, cross_size), disabled_shadow, 4.2, true)
 	draw_line(center + Vector2(-cross_size, -cross_size), center + Vector2(cross_size, cross_size), disabled_mark, 2.4, true)
 	draw_line(center + Vector2(cross_size, -cross_size), center + Vector2(-cross_size, cross_size), disabled_mark, 2.4, true)
+
+
+func _draw_disabled_module_overlay(center: Vector2) -> void:
+	var disabled_shadow := Color(0.04, 0.048, 0.06, 0.62)
+	var disabled_mark := Color(0.9, 0.93, 0.96, 0.74)
+
+	var crack := PackedVector2Array([
+		center + Vector2(-4.0, -10.0),
+		center + Vector2(1.0, -3.0),
+		center + Vector2(-2.0, 2.0),
+		center + Vector2(5.0, 10.0),
+	])
+	draw_polyline(crack, disabled_shadow, 4.2, true)
+	draw_polyline(crack, disabled_mark, 2.2, true)
 
 
 func _draw_node_role_mark(center: Vector2, role: String, is_active: bool) -> void:
@@ -264,8 +332,57 @@ func _draw_node_role_mark(center: Vector2, role: String, is_active: bool) -> voi
 		draw_line(center + Vector2(-5.0, 4.0), center + Vector2(5.0, -4.0), warning_color, 2.2, true)
 
 
+func _draw_module_kind_mark(center: Vector2, module_kind: String, is_active: bool) -> void:
+	var mark_color := _module_kind_color(module_kind) if is_active else _module_inactive_mark_color()
+
+	if module_kind == MatchState.MODULE_CONNECTION:
+		_draw_module_bolt(center, mark_color)
+	elif module_kind == MatchState.MODULE_REPAIR:
+		draw_line(center + Vector2(-7.0, 0.0), center + Vector2(7.0, 0.0), mark_color, 2.6, true)
+		draw_line(center + Vector2(0.0, -7.0), center + Vector2(0.0, 7.0), mark_color, 2.6, true)
+
+	if is_active:
+		_draw_module_effect_indicator(center, _module_kind_color(module_kind))
+
+
+func _draw_module_bolt(center: Vector2, color: Color) -> void:
+	var bolt := PackedVector2Array([
+		center + Vector2(1.0, -10.0),
+		center + Vector2(-5.0, 1.0),
+		center + Vector2(-1.0, 1.0),
+		center + Vector2(-4.0, 10.0),
+		center + Vector2(6.0, -3.0),
+		center + Vector2(1.0, -3.0),
+	])
+	draw_colored_polygon(bolt, color)
+
+
+func _draw_module_effect_indicator(center: Vector2, color: Color) -> void:
+	var indicator_color := color.lightened(0.12)
+	indicator_color.a = 0.96
+	_draw_hex_outline(center, MODULE_EFFECT_RADIUS, indicator_color, 2.6)
+
+
 func _resource_color() -> Color:
 	return Color(0.45, 0.86, 0.46)
+
+
+func _module_color() -> Color:
+	return Color(0.72, 0.58, 0.96)
+
+
+func _module_kind_color(module_kind: String) -> Color:
+	if module_kind == MatchState.MODULE_CONNECTION:
+		return Color(0.82, 0.58, 1.0)
+
+	if module_kind == MatchState.MODULE_REPAIR:
+		return Color(0.38, 0.95, 0.58)
+
+	return _module_color()
+
+
+func _module_inactive_mark_color() -> Color:
+	return Color(0.86, 0.88, 0.92, 0.58)
 
 
 func _warning_color() -> Color:
@@ -278,6 +395,9 @@ func _is_valid_target(cell: Vector2i) -> bool:
 
 	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
 		return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell)
+
+	if selected_action_type == GameHud.ACTION_BUILD_MODULE:
+		return match_state.can_target_action(GameAction.TYPE_BUILD_CONNECTION_MODULE, cell) or match_state.can_target_action(GameAction.TYPE_BUILD_REPAIR_MODULE, cell)
 
 	return match_state.can_target_action(selected_action_type, cell)
 

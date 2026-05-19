@@ -19,6 +19,7 @@ func _ready() -> void:
 
 	hud.action_selected.connect(_select_action)
 	hud.upgrade_role_selected.connect(_submit_upgrade_role)
+	hud.module_kind_selected.connect(_submit_module_kind)
 	hud.skip_requested.connect(_skip_turn)
 	hud.restart_requested.connect(_restart_match)
 
@@ -64,8 +65,7 @@ func _handle_key(event: InputEventKey) -> void:
 		KEY_3:
 			_select_action(GameHud.ACTION_UPGRADE_NODE)
 		KEY_4:
-			match_state.status_message = "Modules are not available in MVP"
-			_refresh()
+			_select_action(GameHud.ACTION_BUILD_MODULE)
 		KEY_SPACE:
 			_skip_turn()
 		KEY_R:
@@ -78,6 +78,9 @@ func _submit_selected_cell_action(cell: Vector2i) -> Dictionary:
 
 	if selected_action_type == GameHud.ACTION_UPGRADE_NODE:
 		return _open_upgrade_role_menu(cell)
+
+	if selected_action_type == GameHud.ACTION_BUILD_MODULE:
+		return _open_module_kind_menu(cell)
 
 	if selected_action_type == DEFAULT_ACTION_TYPE and _cell_has_current_player_striker(cell):
 		return _try_select_striker_source(cell)
@@ -148,10 +151,11 @@ func _submit_action(action: GameAction) -> Dictionary:
 
 func _select_action(action_type: String) -> void:
 	if action_type not in [
-		GameAction.TYPE_PLACE_NODE,
-		GameAction.TYPE_REPAIR_NODE,
-		GameHud.ACTION_UPGRADE_NODE,
-	]:
+			GameAction.TYPE_PLACE_NODE,
+			GameAction.TYPE_REPAIR_NODE,
+			GameHud.ACTION_UPGRADE_NODE,
+			GameHud.ACTION_BUILD_MODULE,
+		]:
 		return
 
 	selected_action_type = action_type
@@ -167,6 +171,14 @@ func _submit_upgrade_role(action_type: String, target_cell: Vector2i) -> void:
 			_submit_action(GameAction.upgrade_harvester(match_state.current_player, target_cell))
 		GameAction.TYPE_UPGRADE_STRIKER:
 			_submit_action(GameAction.upgrade_striker(match_state.current_player, target_cell))
+
+
+func _submit_module_kind(action_type: String, target_cell: Vector2i) -> void:
+	match action_type:
+		GameAction.TYPE_BUILD_CONNECTION_MODULE:
+			_submit_action(GameAction.build_connection_module(match_state.current_player, target_cell))
+		GameAction.TYPE_BUILD_REPAIR_MODULE:
+			_submit_action(GameAction.build_repair_module(match_state.current_player, target_cell))
 
 
 func _skip_turn() -> void:
@@ -284,6 +296,33 @@ func _can_select_upgrade_target(cell: Vector2i) -> bool:
 	return match_state.can_target_action(GameAction.TYPE_UPGRADE_HARVESTER, cell) or match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell)
 
 
+func _open_module_kind_menu(cell: Vector2i) -> Dictionary:
+	if not _can_select_module_target(cell):
+		if match_state.can_target_action_shape(GameAction.TYPE_BUILD_CONNECTION_MODULE, cell) and not match_state.can_afford_target_action(match_state.current_player, GameAction.TYPE_BUILD_CONNECTION_MODULE, cell):
+			var required_resource_cost := match_state.action_target_resource_cost(match_state.current_player, GameAction.TYPE_BUILD_CONNECTION_MODULE, cell)
+			match_state.status_message = match_state.action_resource_requirement_message(GameAction.TYPE_BUILD_CONNECTION_MODULE, required_resource_cost)
+		else:
+			match_state.status_message = "Select a highlighted hex to build a module"
+
+		_refresh()
+		return {
+			"ok": false,
+			"message": match_state.status_message,
+		}
+
+	hud.show_module_menu(get_viewport().get_mouse_position(), cell)
+	match_state.status_message = "Choose a module for this hex"
+	_refresh()
+	return {
+		"ok": true,
+		"message": match_state.status_message,
+	}
+
+
+func _can_select_module_target(cell: Vector2i) -> bool:
+	return match_state.can_target_action(GameAction.TYPE_BUILD_CONNECTION_MODULE, cell) or match_state.can_target_action(GameAction.TYPE_BUILD_REPAIR_MODULE, cell)
+
+
 func _action_label(action_type: String) -> String:
 	match action_type:
 		GameAction.TYPE_PLACE_NODE:
@@ -292,10 +331,16 @@ func _action_label(action_type: String) -> String:
 			return "Repair"
 		GameHud.ACTION_UPGRADE_NODE:
 			return "Upgrade node"
+		GameHud.ACTION_BUILD_MODULE:
+			return "Build module"
 		GameAction.TYPE_UPGRADE_HARVESTER:
 			return "Upgrade node: Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Upgrade node: Striker"
+		GameAction.TYPE_BUILD_CONNECTION_MODULE:
+			return "Build module: Connection"
+		GameAction.TYPE_BUILD_REPAIR_MODULE:
+			return "Build module: Repair"
 		GameAction.TYPE_STRIKER_ATTACK:
 			return "Striker Attack"
 		_:

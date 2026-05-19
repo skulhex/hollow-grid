@@ -7,6 +7,8 @@ const TYPE_BREAK_NODE := "break_node"
 const TYPE_CLEAR_NODE := "clear_node"
 const TYPE_UPGRADE_HARVESTER := "upgrade_harvester"
 const TYPE_UPGRADE_STRIKER := "upgrade_striker"
+const TYPE_BUILD_CONNECTION_MODULE := "build_connection_module"
+const TYPE_BUILD_REPAIR_MODULE := "build_repair_module"
 const TYPE_STRIKER_ATTACK := "striker_attack"
 const TYPE_SKIP := "skip"
 
@@ -57,6 +59,14 @@ static func upgrade_harvester(action_player: String, action_cell: Vector2i) -> G
 
 static func upgrade_striker(action_player: String, action_cell: Vector2i) -> GameAction:
 	return GameAction.new(TYPE_UPGRADE_STRIKER, action_player, action_cell, true)
+
+
+static func build_connection_module(action_player: String, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_BUILD_CONNECTION_MODULE, action_player, action_cell, true)
+
+
+static func build_repair_module(action_player: String, action_cell: Vector2i) -> GameAction:
+	return GameAction.new(TYPE_BUILD_REPAIR_MODULE, action_player, action_cell, true)
 
 
 static func striker_attack(action_player: String, action_source_cell: Vector2i, action_cell: Vector2i) -> GameAction:
@@ -137,6 +147,8 @@ func is_valid_shape() -> bool:
 		TYPE_CLEAR_NODE,
 		TYPE_UPGRADE_HARVESTER,
 		TYPE_UPGRADE_STRIKER,
+		TYPE_BUILD_CONNECTION_MODULE,
+		TYPE_BUILD_REPAIR_MODULE,
 	] and has_cell and not has_source_cell
 
 

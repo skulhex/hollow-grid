@@ -3,10 +3,14 @@ extends RefCounted
 
 const OBJECT_CORE := "core"
 const OBJECT_NODE := "node"
+const OBJECT_MODULE := "module"
 
 const NODE_CONDUIT := "conduit"
 const NODE_HARVESTER := "harvester"
 const NODE_STRIKER := "striker"
+
+const MODULE_CONNECTION := "connection"
+const MODULE_REPAIR := "repair"
 
 const CONTROL_POINT := Vector2i(0, 0)
 
@@ -18,6 +22,7 @@ const NODE_ROLE_ACTION_CHARGES_PER_TURN := 1
 const HARVESTER_RESOURCE_GAIN := 1
 const HARVESTER_UPGRADE_RESOURCE_COST := 1
 const STRIKER_UPGRADE_RESOURCE_COST := 1
+const MODULE_BUILD_RESOURCE_COST := 5
 const STRIKER_CORE_DAMAGE := 1
 
 var board_radius: int
@@ -101,6 +106,10 @@ func apply_action(raw_action: Variant) -> Dictionary:
 			return _apply_upgrade_node(action, NODE_HARVESTER)
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return _apply_upgrade_node(action, NODE_STRIKER)
+		GameAction.TYPE_BUILD_CONNECTION_MODULE:
+			return _apply_build_module(action, MODULE_CONNECTION)
+		GameAction.TYPE_BUILD_REPAIR_MODULE:
+			return _apply_build_module(action, MODULE_REPAIR)
 		GameAction.TYPE_STRIKER_ATTACK:
 			return _apply_striker_attack(action)
 		GameAction.TYPE_SKIP:
@@ -134,6 +143,14 @@ func upgrade_striker(cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.upgrade_striker(current_player, cell))
 
 
+func build_connection_module(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.build_connection_module(current_player, cell))
+
+
+func build_repair_module(cell: Vector2i) -> Dictionary:
+	return apply_action(GameAction.build_repair_module(current_player, cell))
+
+
 func striker_attack(source_cell: Vector2i, cell: Vector2i) -> Dictionary:
 	return apply_action(GameAction.striker_attack(current_player, source_cell, cell))
 
@@ -152,7 +169,11 @@ func can_place_node(cell: Vector2i) -> bool:
 	if has_object(cell):
 		return false
 
-	return has_active_neighbor(current_player, cell)
+	return has_active_network_neighbor(current_player, cell)
+
+
+func can_build_module(cell: Vector2i) -> bool:
+	return _can_build_module(current_player, cell)
 
 
 func can_break_node(cell: Vector2i) -> bool:
@@ -164,7 +185,7 @@ func can_break_node(cell: Vector2i) -> bool:
 	if object.is_empty():
 		return false
 
-	if object.get("type") != OBJECT_NODE:
+	if not _is_disable_target(object):
 		return false
 
 	if object.get("disabled", false):
@@ -173,7 +194,7 @@ func can_break_node(cell: Vector2i) -> bool:
 	if object.get("owner") == current_player:
 		return false
 
-	return has_active_neighbor(current_player, cell)
+	return has_active_network_neighbor(current_player, cell)
 
 
 func can_repair_node(cell: Vector2i) -> bool:
@@ -185,7 +206,7 @@ func can_repair_node(cell: Vector2i) -> bool:
 	if object.is_empty():
 		return false
 
-	if object.get("type") != OBJECT_NODE:
+	if object.get("type") != OBJECT_NODE and object.get("type") != OBJECT_MODULE:
 		return false
 
 	if object.get("owner") != current_player:
@@ -203,7 +224,7 @@ func can_clear_node(cell: Vector2i) -> bool:
 	if object.is_empty():
 		return false
 
-	if object.get("type") != OBJECT_NODE:
+	if not _is_clear_target(object):
 		return false
 
 	if not object.get("disabled", false):
@@ -212,7 +233,7 @@ func can_clear_node(cell: Vector2i) -> bool:
 	if object.get("owner") == current_player:
 		return true
 
-	return has_active_neighbor(current_player, cell)
+	return has_active_network_neighbor(current_player, cell)
 
 
 func can_upgrade_node(cell: Vector2i) -> bool:
@@ -236,6 +257,8 @@ func upkeep_preview(player: String) -> Dictionary:
 		"player": player,
 		"resource_gain": _harvester_resource_gain(player),
 		"restored_charges": _preview_role_node_action_charges(player),
+		"connection_bonus": _preview_module_bonus(player, MODULE_CONNECTION),
+		"repair_bonus": _preview_module_bonus(player, MODULE_REPAIR),
 	}
 
 
@@ -265,6 +288,8 @@ func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 			return can_clear_node(cell)
 		GameAction.TYPE_UPGRADE_HARVESTER, GameAction.TYPE_UPGRADE_STRIKER:
 			return can_upgrade_node(cell)
+		GameAction.TYPE_BUILD_CONNECTION_MODULE, GameAction.TYPE_BUILD_REPAIR_MODULE:
+			return can_build_module(cell)
 		_:
 			return false
 
@@ -301,6 +326,8 @@ func action_resource_cost(action_type: String) -> int:
 			return HARVESTER_UPGRADE_RESOURCE_COST
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return STRIKER_UPGRADE_RESOURCE_COST
+		GameAction.TYPE_BUILD_CONNECTION_MODULE, GameAction.TYPE_BUILD_REPAIR_MODULE:
+			return MODULE_BUILD_RESOURCE_COST
 
 	return 0
 
@@ -310,7 +337,12 @@ func action_target_resource_cost(_player: String, action_type: String, _cell: Ve
 
 
 func action_uses_resource(action_type: String) -> bool:
-	return action_type == GameAction.TYPE_UPGRADE_HARVESTER or action_type == GameAction.TYPE_UPGRADE_STRIKER
+	return action_type in [
+		GameAction.TYPE_UPGRADE_HARVESTER,
+		GameAction.TYPE_UPGRADE_STRIKER,
+		GameAction.TYPE_BUILD_CONNECTION_MODULE,
+		GameAction.TYPE_BUILD_REPAIR_MODULE,
+	]
 
 
 func action_uses_connection_limit(action_type: String) -> bool:
@@ -416,6 +448,25 @@ func has_active_neighbor(owner: String, cell: Vector2i) -> bool:
 	return false
 
 
+func has_active_network_neighbor(owner: String, cell: Vector2i) -> bool:
+	for direction in HexGrid.DIRECTIONS:
+		var neighbor_object := get_object(cell + direction)
+
+		if neighbor_object.is_empty():
+			continue
+
+		if neighbor_object.get("owner") != owner:
+			continue
+
+		if not neighbor_object.get("active", false):
+			continue
+
+		if _is_network_object(neighbor_object):
+			return true
+
+	return false
+
+
 func has_object(cell: Vector2i) -> bool:
 	return objects.has(cell_key(cell))
 
@@ -445,7 +496,7 @@ func _apply_place_node(action: GameAction) -> Dictionary:
 
 func _apply_repair_node(action: GameAction) -> Dictionary:
 	if not can_repair_node(action.cell):
-		status_message = "%s cannot repair that node" % GameDefs.player_label(current_player)
+		status_message = "%s cannot repair that object" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
 	if not can_afford_action(current_player, action.action_type):
@@ -454,7 +505,31 @@ func _apply_repair_node(action: GameAction) -> Dictionary:
 
 	_spend_repair_action()
 	objects[cell_key(action.cell)]["disabled"] = false
-	_complete_successful_action(action, "%s repaired a node" % GameDefs.player_label(current_player))
+	if objects[cell_key(action.cell)].get("type") == OBJECT_MODULE:
+		objects[cell_key(action.cell)]["ready"] = false
+	_complete_successful_action(action, "%s repaired a %s" % [
+		GameDefs.player_label(current_player),
+		_object_type_label(get_object(action.cell)),
+	])
+	return _result(true, status_message, action)
+
+
+func _apply_build_module(action: GameAction, module_kind: String) -> Dictionary:
+	if not can_build_module(action.cell):
+		status_message = "%s cannot build a module there" % GameDefs.player_label(current_player)
+		return _result(false, status_message, action)
+
+	if not can_afford_target_action(current_player, action.action_type, action.cell):
+		var module_cost := action_target_resource_cost(current_player, action.action_type, action.cell)
+		status_message = action_resource_requirement_message(action.action_type, module_cost)
+		return _result(false, status_message, action)
+
+	_spend_resource(current_player, action_resource_cost(action.action_type))
+	_add_object(action.cell, OBJECT_MODULE, current_player, module_kind)
+	_complete_successful_action(action, "%s built a %s Module" % [
+		GameDefs.player_label(current_player),
+		_module_kind_label(module_kind),
+	])
 	return _result(true, status_message, action)
 
 
@@ -465,12 +540,12 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 
 	var object := get_object(action.cell)
 
-	if object.is_empty() or object.get("type") != OBJECT_NODE or object.get("disabled", false) or object.get("owner") == current_player:
+	if object.is_empty() or not _is_disable_target(object) or object.get("disabled", false) or object.get("owner") == current_player:
 		status_message = "%s cannot break that cell" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
-	if not has_active_neighbor(current_player, action.cell):
-		status_message = "%s needs an active neighbor to break a node" % GameDefs.player_label(current_player)
+	if not has_active_network_neighbor(current_player, action.cell):
+		status_message = "%s needs an active network neighbor to break that object" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
 	if not can_afford_action(current_player, action.action_type):
@@ -479,7 +554,10 @@ func _apply_break_node(action: GameAction) -> Dictionary:
 
 	objects[cell_key(action.cell)]["disabled"] = true
 	objects[cell_key(action.cell)]["active"] = false
-	_complete_successful_action(action, "%s disabled an enemy node" % GameDefs.player_label(current_player))
+	_complete_successful_action(action, "%s disabled an enemy %s" % [
+		GameDefs.player_label(current_player),
+		_object_type_label(object),
+	])
 	return _result(true, status_message, action)
 
 
@@ -492,13 +570,21 @@ func _apply_clear_node(action: GameAction) -> Dictionary:
 		status_message = action_limit_requirement_message(action.action_type)
 		return _result(false, status_message, action)
 
-	var object_owner: String = get_object(action.cell).get("owner", "")
+	var object := get_object(action.cell)
+	var object_owner: String = object.get("owner", "")
+	var object_label := _object_type_label(object)
 	objects.erase(cell_key(action.cell))
 
-	var clear_message := "%s cleared an enemy disabled node" % GameDefs.player_label(current_player)
+	var clear_message := "%s cleared an enemy disabled %s" % [
+		GameDefs.player_label(current_player),
+		object_label,
+	]
 
 	if object_owner == current_player:
-		clear_message = "%s cleared a friendly disabled node" % GameDefs.player_label(current_player)
+		clear_message = "%s cleared a friendly disabled %s" % [
+			GameDefs.player_label(current_player),
+			object_label,
+		]
 
 	_complete_successful_action(action, clear_message)
 	return _result(true, status_message, action)
@@ -533,11 +619,16 @@ func _apply_striker_attack(action: GameAction) -> Dictionary:
 	var target := get_object(action.cell)
 	var target_type: String = target.get("type", "")
 
-	if target_type == OBJECT_NODE:
+	if target_type == OBJECT_NODE or target_type == OBJECT_MODULE:
 		objects[cell_key(action.cell)]["disabled"] = true
 		objects[cell_key(action.cell)]["active"] = false
+		if target_type == OBJECT_MODULE:
+			objects[cell_key(action.cell)]["ready"] = false
 		objects[cell_key(action.source_cell)]["action_charges"] = 0
-		_complete_successful_action(action, "%s Striker disabled an enemy node" % GameDefs.player_label(current_player))
+		_complete_successful_action(action, "%s Striker disabled an enemy %s" % [
+			GameDefs.player_label(current_player),
+			_object_type_label(target),
+		])
 		return _result(true, status_message, action)
 
 	if target_type == OBJECT_CORE:
@@ -654,6 +745,8 @@ func _update_active_nodes() -> void:
 
 	_mark_active_network(GameDefs.PLAYER_ONE)
 	_mark_active_network(GameDefs.PLAYER_TWO)
+	_mark_active_modules(GameDefs.PLAYER_ONE)
+	_mark_active_modules(GameDefs.PLAYER_TWO)
 
 
 func _mark_active_network(owner: String) -> void:
@@ -690,8 +783,46 @@ func _mark_active_network(owner: String) -> void:
 			if neighbor_object.get("disabled", false):
 				continue
 
+			if not _is_network_object(neighbor_object):
+				continue
+
 			visited[key] = true
 			queue.append(neighbor)
+
+
+func _mark_active_modules(owner: String) -> void:
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") != OBJECT_MODULE:
+			continue
+
+		if object.get("owner") != owner:
+			continue
+
+		if object.get("disabled", false):
+			object["active"] = false
+			object["ready"] = false
+			objects[key] = object
+			continue
+
+		object["active"] = has_active_network_neighbor(owner, object.get("cell", Vector2i.ZERO))
+		if not object["active"]:
+			object["ready"] = false
+		objects[key] = object
+
+
+func _can_build_module(player: String, cell: Vector2i) -> bool:
+	if not contains_cell(cell):
+		return false
+
+	if is_control_point(cell):
+		return false
+
+	if has_object(cell):
+		return false
+
+	return has_active_network_neighbor(player, cell)
 
 
 func _can_upgrade_node(player: String, cell: Vector2i) -> bool:
@@ -793,6 +924,8 @@ func _can_striker_attack(player: String, source_cell: Vector2i, target_cell: Vec
 	match str(target.get("type", "")):
 		OBJECT_NODE:
 			return not target.get("disabled", false)
+		OBJECT_MODULE:
+			return not target.get("disabled", false) and target.get("active", false)
 		OBJECT_CORE:
 			return true
 		_:
@@ -817,8 +950,11 @@ func _striker_attack_status_message(player: String, source_cell: Vector2i, targe
 	if target.get("owner") == player:
 		return "%s Striker cannot target friendly objects" % GameDefs.player_label(player)
 
-	if target.get("type") == OBJECT_NODE and target.get("disabled", false):
+	if _is_disable_target(target) and target.get("disabled", false):
 		return "%s Striker target is already disabled" % GameDefs.player_label(player)
+
+	if target.get("type") == OBJECT_MODULE and not target.get("active", false):
+		return "%s Striker target module is inactive" % GameDefs.player_label(player)
 
 	return "%s cannot strike that target" % GameDefs.player_label(player)
 
@@ -829,6 +965,66 @@ func _are_neighbors(first_cell: Vector2i, second_cell: Vector2i) -> bool:
 			return true
 
 	return false
+
+
+func _is_network_object(object: Dictionary) -> bool:
+	return object.get("type") == OBJECT_CORE or object.get("type") == OBJECT_NODE
+
+
+func _is_disable_target(object: Dictionary) -> bool:
+	return object.get("type") == OBJECT_NODE or object.get("type") == OBJECT_MODULE
+
+
+func _is_clear_target(object: Dictionary) -> bool:
+	return object.get("type") == OBJECT_NODE or object.get("type") == OBJECT_MODULE
+
+
+func _active_module_bonus(player: String, module_kind: String) -> int:
+	var bonus := 0
+
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") != OBJECT_MODULE:
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		if object.get("module_kind", "") != module_kind:
+			continue
+
+		if object.get("disabled", false):
+			continue
+
+		if object.get("active", false) and object.get("ready", false):
+			bonus += 1
+
+	return bonus
+
+
+func _preview_module_bonus(player: String, module_kind: String) -> int:
+	var bonus := 0
+
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") != OBJECT_MODULE:
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		if object.get("module_kind", "") != module_kind:
+			continue
+
+		if object.get("disabled", false):
+			continue
+
+		if object.get("active", false):
+			bonus += 1
+
+	return bonus
 
 
 func _harvester_resource_gain(player: String) -> int:
@@ -861,7 +1057,7 @@ func _harvester_resource_gain(player: String) -> int:
 	return gain
 
 
-func _add_object(cell: Vector2i, type: String, owner: String) -> void:
+func _add_object(cell: Vector2i, type: String, owner: String, module_kind: String = "") -> void:
 	var object := {
 		"cell": cell,
 		"type": type,
@@ -874,13 +1070,17 @@ func _add_object(cell: Vector2i, type: String, owner: String) -> void:
 		object["role"] = NODE_CONDUIT
 		object["ready"] = false
 		object["action_charges"] = 0
+	elif type == OBJECT_MODULE:
+		object["module_kind"] = module_kind
+		object["ready"] = false
 
 	objects[cell_key(cell)] = object
 
 
 func _start_turn_for_player(player: String) -> void:
 	_update_active_nodes()
-	_reset_turn_action_limits()
+	_ready_modules_for_player(player)
+	_reset_turn_action_limits(player)
 
 	var charged_nodes := _reset_role_node_action_charges(player)
 	var resource_gain := _harvester_resource_gain(player)
@@ -923,6 +1123,28 @@ func _reset_role_node_action_charges(player: String) -> int:
 	return charged_nodes
 
 
+func _ready_modules_for_player(player: String) -> int:
+	var ready_modules := 0
+
+	for key in objects.keys():
+		var object: Dictionary = objects[key]
+
+		if object.get("type") != OBJECT_MODULE:
+			continue
+
+		if object.get("owner") != player:
+			continue
+
+		var is_ready: bool = bool(object.get("active", false)) and not object.get("disabled", false)
+		object["ready"] = is_ready
+		objects[key] = object
+
+		if is_ready:
+			ready_modules += 1
+
+	return ready_modules
+
+
 func _preview_role_node_action_charges(player: String) -> int:
 	var charged_nodes := 0
 
@@ -958,6 +1180,21 @@ func _format_upkeep_message(player: String, resource_gain: int, charged_nodes: i
 			"" if charged_nodes == 1 else "s",
 		])
 
+	var connection_bonus := _active_module_bonus(player, MODULE_CONNECTION)
+	var repair_bonus := _active_module_bonus(player, MODULE_REPAIR)
+
+	if connection_bonus > 0:
+		messages.append("+%d connection action%s" % [
+			connection_bonus,
+			"" if connection_bonus == 1 else "s",
+		])
+
+	if repair_bonus > 0:
+		messages.append("+%d repair action%s" % [
+			repair_bonus,
+			"" if repair_bonus == 1 else "s",
+		])
+
 	if messages.is_empty():
 		messages.append("ready")
 
@@ -971,9 +1208,9 @@ func _spend_resource(player: String, amount: int) -> void:
 	resources[player] = maxi(0, int(resources.get(player, 0)) - amount)
 
 
-func _reset_turn_action_limits() -> void:
-	connection_actions_left = CONNECTION_ACTIONS_PER_TURN
-	repair_actions_left = REPAIR_ACTIONS_PER_TURN
+func _reset_turn_action_limits(player: String = current_player) -> void:
+	connection_actions_left = CONNECTION_ACTIONS_PER_TURN + _active_module_bonus(player, MODULE_CONNECTION)
+	repair_actions_left = REPAIR_ACTIONS_PER_TURN + _active_module_bonus(player, MODULE_REPAIR)
 
 
 func _spend_connection_action() -> void:
@@ -998,6 +1235,10 @@ func _action_verb(action_type: String) -> String:
 			return "upgrade a Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "upgrade a Striker"
+		GameAction.TYPE_BUILD_CONNECTION_MODULE:
+			return "build a Connection Module"
+		GameAction.TYPE_BUILD_REPAIR_MODULE:
+			return "build a Repair Module"
 		GameAction.TYPE_STRIKER_ATTACK:
 			return "strike"
 		GameAction.TYPE_SKIP:
@@ -1014,6 +1255,28 @@ func _node_role_label(role: String) -> String:
 			return "Striker"
 		_:
 			return "Conduit"
+
+
+func _module_kind_label(module_kind: String) -> String:
+	match module_kind:
+		MODULE_CONNECTION:
+			return "Connection"
+		MODULE_REPAIR:
+			return "Repair"
+		_:
+			return str(module_kind).capitalize()
+
+
+func _object_type_label(object: Dictionary) -> String:
+	match str(object.get("type", "")):
+		OBJECT_MODULE:
+			return "%s module" % _module_kind_label(str(object.get("module_kind", ""))).to_lower()
+		OBJECT_NODE:
+			return "node"
+		OBJECT_CORE:
+			return "Core"
+		_:
+			return "object"
 
 
 func _parse_action(raw_action: Variant) -> GameAction:

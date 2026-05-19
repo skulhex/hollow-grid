@@ -3,12 +3,16 @@ extends CanvasLayer
 
 signal action_selected(action_type: String)
 signal upgrade_role_selected(action_type: String, target_cell: Vector2i)
+signal module_kind_selected(action_type: String, target_cell: Vector2i)
 signal skip_requested
 signal restart_requested
 
 const ACTION_UPGRADE_NODE := "upgrade_node"
+const ACTION_BUILD_MODULE := "build_module"
 const MENU_HARVESTER := 1
 const MENU_STRIKER := 2
+const MENU_CONNECTION_MODULE := 3
+const MENU_REPAIR_MODULE := 4
 
 @onready var status_panel: PanelContainer = $Root/StatusPanel
 @onready var command_panel: PanelContainer = $Root/CommandPanel
@@ -44,6 +48,7 @@ const MENU_STRIKER := 2
 ]
 
 var upgrade_target_cell := BoardView.HOVER_NONE
+var module_target_cell := BoardView.HOVER_NONE
 var current_selected_action_type := GameAction.TYPE_PLACE_NODE
 
 
@@ -53,11 +58,11 @@ func _ready() -> void:
 	place_button.pressed.connect(_on_place_pressed)
 	repair_button.pressed.connect(_on_repair_pressed)
 	upgrade_button.pressed.connect(_on_upgrade_pressed)
+	module_button.pressed.connect(_on_module_pressed)
 	skip_button.pressed.connect(_on_skip_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 	upgrade_popup.id_pressed.connect(_on_upgrade_menu_id_pressed)
-	module_button.disabled = true
-	module_button.tooltip_text = "Modules are not available in MVP"
+	module_button.tooltip_text = "Build a connected module"
 
 
 func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hover_cell: Vector2i = BoardView.HOVER_NONE) -> void:
@@ -84,6 +89,7 @@ func refresh(match_state: MatchState, selected_action_type: String, striker_atta
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
 	repair_button.button_pressed = selected_action_type == GameAction.TYPE_REPAIR_NODE
 	upgrade_button.button_pressed = selected_action_type == ACTION_UPGRADE_NODE
+	module_button.button_pressed = selected_action_type == ACTION_BUILD_MODULE
 	_refresh_button_states(match_state)
 	_refresh_inspector(match_state, hover_cell)
 
@@ -103,10 +109,21 @@ func show_upgrade_menu(screen_position: Vector2, target_cell: Vector2i) -> void:
 	upgrade_popup.popup()
 
 
+func show_module_menu(screen_position: Vector2, target_cell: Vector2i) -> void:
+	module_target_cell = target_cell
+	upgrade_popup.clear()
+	upgrade_popup.add_item("Connection Module (%dR)" % MatchState.MODULE_BUILD_RESOURCE_COST, MENU_CONNECTION_MODULE)
+	upgrade_popup.add_item("Repair Module (%dR)" % MatchState.MODULE_BUILD_RESOURCE_COST, MENU_REPAIR_MODULE)
+	module_button.button_pressed = current_selected_action_type == ACTION_BUILD_MODULE
+	upgrade_popup.position = Vector2i(int(screen_position.x), int(screen_position.y))
+	upgrade_popup.popup()
+
+
 func _refresh_button_states(match_state: MatchState) -> void:
 	place_button.disabled = match_state.finished or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_PLACE_NODE)
 	repair_button.disabled = match_state.finished or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_REPAIR_NODE)
 	upgrade_button.disabled = match_state.finished or not _player_has_upgrade_option(match_state)
+	module_button.disabled = match_state.finished or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_BUILD_CONNECTION_MODULE)
 	skip_button.disabled = match_state.finished
 
 
@@ -150,11 +167,13 @@ func _refresh_inspector(match_state: MatchState, hover_cell: Vector2i) -> void:
 func _format_next_turn_preview(match_state: MatchState) -> String:
 	var preview_player := GameDefs.other_player(match_state.current_player)
 	var preview := match_state.upkeep_preview(preview_player)
-	return "Next turn: %s +%dR, %d charge%s restored" % [
+	return "Next turn: %s +%dR, %d charge%s, +%d Conn, +%d Repair" % [
 		GameDefs.player_label(preview_player),
 		int(preview.get("resource_gain", 0)),
 		int(preview.get("restored_charges", 0)),
 		"" if int(preview.get("restored_charges", 0)) == 1 else "s",
+		int(preview.get("connection_bonus", 0)),
+		int(preview.get("repair_bonus", 0)),
 	]
 
 
@@ -172,6 +191,12 @@ func _possible_actions_text(match_state: MatchState, cell: Vector2i) -> String:
 
 	if match_state.can_target_action(GameAction.TYPE_UPGRADE_STRIKER, cell):
 		actions.append("Upgrade Striker")
+
+	if match_state.can_target_action(GameAction.TYPE_BUILD_CONNECTION_MODULE, cell):
+		actions.append("Build Connection Module")
+
+	if match_state.can_target_action(GameAction.TYPE_BUILD_REPAIR_MODULE, cell):
+		actions.append("Build Repair Module")
 
 	if match_state.can_select_striker_source(cell):
 		actions.append("Striker Attack")
@@ -201,6 +226,9 @@ func _object_role_text(object: Dictionary) -> String:
 	if object.get("type") == MatchState.OBJECT_CORE:
 		return "Core"
 
+	if object.get("type") == MatchState.OBJECT_MODULE:
+		return "%s Module" % str(object.get("module_kind", "")).capitalize()
+
 	return str(object.get("role", MatchState.NODE_CONDUIT)).capitalize()
 
 
@@ -217,6 +245,15 @@ func _object_state_text(object: Dictionary) -> String:
 func _object_ready_text(object: Dictionary) -> String:
 	if object.get("type") == MatchState.OBJECT_CORE:
 		return "always"
+
+	if object.get("type") == MatchState.OBJECT_MODULE:
+		if object.get("active", false) and object.get("ready", false):
+			return "effect on"
+
+		if object.get("active", false):
+			return "pending"
+
+		return "-"
 
 	if object.get("role", MatchState.NODE_CONDUIT) == MatchState.NODE_CONDUIT:
 		return "-"
@@ -268,7 +305,7 @@ func _apply_theme() -> void:
 	_style_action_button(place_button, Color(0.22, 0.58, 1.0))
 	_style_action_button(repair_button, Color(0.48, 0.78, 0.38))
 	_style_action_button(upgrade_button, Color(0.95, 0.78, 0.28))
-	_style_action_button(module_button, Color(0.42, 0.48, 0.58))
+	_style_action_button(module_button, Color(0.72, 0.58, 0.96))
 	_style_skip_button(skip_button)
 	_style_utility_button(restart_button)
 
@@ -375,12 +412,20 @@ func _on_upgrade_pressed() -> void:
 	action_selected.emit(ACTION_UPGRADE_NODE)
 
 
+func _on_module_pressed() -> void:
+	action_selected.emit(ACTION_BUILD_MODULE)
+
+
 func _on_upgrade_menu_id_pressed(id: int) -> void:
 	match id:
 		MENU_HARVESTER:
 			upgrade_role_selected.emit(GameAction.TYPE_UPGRADE_HARVESTER, upgrade_target_cell)
 		MENU_STRIKER:
 			upgrade_role_selected.emit(GameAction.TYPE_UPGRADE_STRIKER, upgrade_target_cell)
+		MENU_CONNECTION_MODULE:
+			module_kind_selected.emit(GameAction.TYPE_BUILD_CONNECTION_MODULE, module_target_cell)
+		MENU_REPAIR_MODULE:
+			module_kind_selected.emit(GameAction.TYPE_BUILD_REPAIR_MODULE, module_target_cell)
 
 
 func _on_skip_pressed() -> void:
@@ -399,10 +444,16 @@ func _action_label(action_type: String, striker_attack_source: Vector2i = BoardV
 			return "Repair"
 		ACTION_UPGRADE_NODE:
 			return "Upgrade node"
+		ACTION_BUILD_MODULE:
+			return "Build module"
 		GameAction.TYPE_UPGRADE_HARVESTER:
 			return "Upgrade node: Harvester"
 		GameAction.TYPE_UPGRADE_STRIKER:
 			return "Upgrade node: Striker"
+		GameAction.TYPE_BUILD_CONNECTION_MODULE:
+			return "Build module: Connection"
+		GameAction.TYPE_BUILD_REPAIR_MODULE:
+			return "Build module: Repair"
 		GameAction.TYPE_STRIKER_ATTACK:
 			if striker_attack_source != BoardView.HOVER_NONE:
 				return "Striker Attack (%d, %d)" % [striker_attack_source.x, striker_attack_source.y]
