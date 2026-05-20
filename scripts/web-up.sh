@@ -4,8 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WEB_PORT="${WEB_PORT:-8080}"
 
-"$ROOT_DIR/scripts/export-web.sh"
-
 cd "$ROOT_DIR"
 WEB_PORT="$WEB_PORT" docker compose up -d --build
 

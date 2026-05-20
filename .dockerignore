@@ -1,0 +1,14 @@
+.git/
+.DS_Store
+dist/
+build/
+coverage/
+
+server/node_modules/
+server/dist/
+server/coverage/
+server/.env
+server/.env.*
+
+game/.godot/
+game/.import/

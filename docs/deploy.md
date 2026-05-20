@@ -2,26 +2,10 @@
 
 Есть два сценария:
 
-- локальный preview: Docker запускает Node-сервер и nginx, nginx отдаёт Godot Web
-  export и проксирует `/ws`;
-- production на Debian: Apache отдаёт Godot Web export, Node WebSocket-сервер
-  работает в Docker, Apache проксирует `/ws` в локальный контейнер.
-
-## Сборка Web-клиента
-
-Из корня репозитория:
-
-```sh
-scripts/export-web.sh
-```
-
-Сгенерированные файлы попадут сюда:
-
-```text
-dist/web/
-```
-
-`dist/` — генерируемый артефакт, его не нужно коммитить.
+- локальный preview: Docker собирает Node-сервер и web image, где Godot Web
+  export уже встроен в nginx;
+- production на Debian: Apache принимает HTTPS и проксирует запросы в Docker
+  контейнеры, а web image не требует локального `dist/web`.
 
 ## Локальный preview через Docker
 
@@ -31,12 +15,13 @@ dist/web/
 scripts/web-up.sh
 ```
 
-Скрипт:
+Скрипт запускает:
 
-- пересобирает Godot Web export в `dist/web/`;
-- запускает `docker compose up -d --build`;
-- поднимает Node-сервер и nginx;
-- печатает URL сайта и healthcheck URL.
+- `docker compose up -d --build`;
+- сборку Node-сервера;
+- сборку web image, который скачивает Godot `4.6.2.stable`, устанавливает Web
+  export templates, экспортирует проект и копирует результат в nginx;
+- запуск Node-сервера и nginx.
 
 По умолчанию сайт доступен здесь:
 
@@ -65,21 +50,67 @@ Nginx принимает `/ws` на том же origin и проксирует W
 scripts/web-down.sh
 ```
 
-## Production: Node-сервер в Docker
+## Ручной Godot Web export для debug
 
-Из корня репозитория:
+Обычно для запуска через Docker этот шаг не нужен: web image собирает Godot
+export сам. Если нужно быстро получить локальные файлы в `dist/web/`, можно
+выполнить:
+
+```sh
+scripts/export-web.sh
+```
+
+Сгенерированные файлы попадут сюда:
+
+```text
+dist/web/
+```
+
+`dist/` — генерируемый артефакт, его не нужно коммитить.
+
+## Production: сборка и публикация images
+
+Для production лучше публиковать оба Docker image в registry, например GHCR.
+На машине сборки или в CI:
+
+```sh
+SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
+WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
+docker compose build
+
+SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
+WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
+docker compose push
+```
+
+На Debian-сервере после этого используй те же image names:
+
+```sh
+SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
+WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
+docker compose pull
+
+SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
+WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
+docker compose up -d
+```
+
+## Production: локальная сборка без registry
+
+Если registry пока не нужен, на Debian можно собрать images прямо из репозитория:
 
 ```sh
 docker compose up -d --build
 ```
 
-Compose публикует контейнер только на localhost:
+Compose публикует контейнеры только на localhost:
 
 ```text
-127.0.0.1:8787 -> container:8787
+127.0.0.1:8787 -> server container:8787
+127.0.0.1:8080 -> web container:80
 ```
 
-Проверка на Debian-хосте:
+Проверка Node-сервера на Debian-хосте:
 
 ```sh
 curl http://127.0.0.1:8787/healthz
@@ -91,21 +122,12 @@ curl http://127.0.0.1:8787/healthz
 ok
 ```
 
-## Production: публикация статических файлов
-
-Скопируй или синхронизируй web-сборку в document root Apache:
-
-```sh
-sudo mkdir -p /var/www/hollow-grid
-sudo rsync -a --delete dist/web/ /var/www/hollow-grid/
-```
-
 ## Production: Apache Virtual Host
 
 Включи нужные модули Apache:
 
 ```sh
-sudo a2enmod headers proxy proxy_http proxy_wstunnel ssl mime
+sudo a2enmod headers proxy proxy_http proxy_wstunnel ssl
 sudo systemctl reload apache2
 ```
 
@@ -115,20 +137,13 @@ sudo systemctl reload apache2
 <VirtualHost *:443>
     ServerName example.com
 
-    DocumentRoot /var/www/hollow-grid
-    DirectoryIndex index.html
-
-    <Directory /var/www/hollow-grid>
-        Require all granted
-        Options -Indexes
-    </Directory>
-
-    AddType application/wasm .wasm
-    AddType application/octet-stream .pck
-
     ProxyPreserveHost On
-    ProxyPass "/ws" "ws://127.0.0.1:8787/"
-    ProxyPassReverse "/ws" "ws://127.0.0.1:8787/"
+
+    ProxyPass "/ws" "ws://127.0.0.1:8080/ws"
+    ProxyPassReverse "/ws" "ws://127.0.0.1:8080/ws"
+
+    ProxyPass "/" "http://127.0.0.1:8080/"
+    ProxyPassReverse "/" "http://127.0.0.1:8080/"
 
     SSLEngine on
     SSLCertificateFile /etc/letsencrypt/live/example.com/fullchain.pem
@@ -137,7 +152,8 @@ sudo systemctl reload apache2
 ```
 
 Замени `example.com` и пути к сертификатам на свой домен и реальные файлы
-сертификата.
+сертификата. Apache в этой схеме только принимает HTTPS и проксирует трафик в
+локальный web container. Статические файлы игры уже находятся внутри web image.
 
 Если игра открыта через HTTPS, браузер требует WebSocket-подключение через
 `wss://`. Godot-клиент автоматически вычисляет такой адрес:

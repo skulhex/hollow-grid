@@ -52,15 +52,9 @@ npm run build
 
 `npm test` проверяет валидацию действий, TypeScript-порт правил матча и WebSocket room flow. `npm run build` проверяет TypeScript-компиляцию.
 
-## Web export и деплой
+## Web preview и деплой
 
-Godot Web export генерируется в `dist/web/`:
-
-```sh
-scripts/export-web.sh
-```
-
-Для локальной проверки полного web-flow одной командой:
+Полный локальный web-flow запускается одной командой:
 
 ```sh
 scripts/web-up.sh
@@ -70,6 +64,15 @@ scripts/web-up.sh
 
 ```text
 http://127.0.0.1:8080/
+```
+
+Команда собирает Docker images для Node-сервера и web-клиента. Web image сам
+скачивает Godot, экспортирует проект и кладёт готовую игру в nginx runtime.
+
+Для ручной debug-сборки Godot Web export в `dist/web/` можно использовать:
+
+```sh
+scripts/export-web.sh
 ```
 
 Godot-клиент в браузере подключается к multiplayer через `/ws`, а nginx внутри
