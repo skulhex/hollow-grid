@@ -1,114 +1,23 @@
 # Деплой Hollow Grid
 
-Есть два сценария:
+Документ описывает локальный web preview и production deploy через Docker.
+Статические файлы Godot Web export находятся внутри web image, поэтому отдельный
+`dist/web` на сервере не нужен.
 
-- локальный preview: Docker собирает Node-сервер и web image, где Godot Web
-  export уже встроен в nginx;
-- production на Debian: Apache принимает HTTPS и проксирует запросы в Docker
-  контейнеры, а web image не требует локального `dist/web`.
+## Схема
 
-## Локальный preview через Docker
-
-Из корня репозитория:
-
-```sh
-scripts/web-up.sh
-```
-
-Скрипт запускает:
-
-- `docker compose up -d --build`;
-- сборку Node-сервера;
-- сборку web image, который скачивает Godot `4.6.2.stable`, устанавливает Web
-  export templates, экспортирует проект и копирует результат в nginx;
-- запуск Node-сервера и nginx.
-
-По умолчанию сайт доступен здесь:
+Локально:
 
 ```text
-http://127.0.0.1:8080/
+browser -> http://127.0.0.1:8080/ -> web nginx
+browser -> ws://127.0.0.1:8080/ws -> web nginx -> server:8787
 ```
 
-Порт можно изменить через `WEB_PORT`:
-
-```sh
-WEB_PORT=8090 scripts/web-up.sh
-```
-
-В браузере Godot-клиент автоматически подключается к:
+В production Apache принимает HTTPS и проксирует запросы в Docker:
 
 ```text
-ws://127.0.0.1:8080/ws
-```
-
-Nginx принимает `/ws` на том же origin и проксирует WebSocket в Node-сервис
-внутри compose network.
-
-Остановить локальный preview:
-
-```sh
-scripts/web-down.sh
-```
-
-## Ручной Godot Web export для debug
-
-Обычно для запуска через Docker этот шаг не нужен: web image собирает Godot
-export сам. Если нужно быстро получить локальные файлы в `dist/web/`, можно
-выполнить:
-
-```sh
-scripts/export-web.sh
-```
-
-Сгенерированные файлы попадут сюда:
-
-```text
-dist/web/
-```
-
-`dist/` — генерируемый артефакт, его не нужно коммитить.
-
-## Production: сборка и публикация images через GitHub Actions
-
-GitHub Actions публикует два image в GHCR на push в `main` и на tags `v*`:
-
-```text
-ghcr.io/<owner>/<repo>/server
-ghcr.io/<owner>/<repo>/web
-```
-
-На `main` публикуются tags `main`, `main-<short-sha>`, `sha-<short-sha>` и
-`latest`. На release tag `v1.2.3` публикуются `v1.2.3` и `sha-<short-sha>`.
-
-Если GitHub не даёт workflow публиковать packages, проверь настройки
-репозитория: `Settings -> Actions -> General -> Workflow permissions`. Для
-публикации в GHCR у `GITHUB_TOKEN` должно быть право записи.
-
-Если package visibility приватная, на Debian-сервере нужно один раз выполнить
-`docker login ghcr.io` с GitHub token, у которого есть право читать packages:
-
-```sh
-docker login ghcr.io
-```
-
-Для ручного обновления на Debian используй:
-
-```sh
-SERVER_IMAGE=ghcr.io/<owner>/<repo>/server:<tag> \
-WEB_IMAGE=ghcr.io/<owner>/<repo>/web:<tag> \
-docker compose pull
-
-SERVER_IMAGE=ghcr.io/<owner>/<repo>/server:<tag> \
-WEB_IMAGE=ghcr.io/<owner>/<repo>/web:<tag> \
-docker compose up -d
-```
-
-## Production: локальная сборка без registry
-
-Если registry пока не нужен, на Debian можно собрать images прямо из репозитория:
-
-```sh
-docker compose up -d --build
+https://example.com/  -> Apache -> http://127.0.0.1:8080/
+wss://example.com/ws -> Apache -> ws://127.0.0.1:8080/ws
 ```
 
 Compose публикует контейнеры только на localhost:
@@ -118,31 +27,130 @@ Compose публикует контейнеры только на localhost:
 127.0.0.1:8080 -> web container:80
 ```
 
-Проверка Node-сервера на Debian-хосте:
+## Требования
+
+- Docker с Compose plugin.
+- Для production: Apache 2, домен и HTTPS-сертификат.
+- Для первой сборки web image: доступ в интернет, потому что Dockerfile
+  скачивает Godot `4.6.2.stable` и Web export templates.
+
+## Runtime-настройки
+
+Сервер:
+
+- `HOST` — bind host, по умолчанию `127.0.0.1` в dev и `0.0.0.0` в Docker image;
+- `PORT` — порт сервера, по умолчанию `8787`;
+- `GET /healthz` возвращает `ok`.
+
+Compose:
+
+- `WEB_PORT` — localhost-порт web container, по умолчанию `8080`;
+- `SERVER_IMAGE` — image сервера, по умолчанию `hollow-grid-server`;
+- `WEB_IMAGE` — image web-клиента, по умолчанию `hollow-grid-web`.
+
+Godot Web client в браузере подключается к same-origin `/ws`: на HTTP это
+`ws://<host>/ws`, на HTTPS — `wss://<host>/ws`. URL можно переопределить до
+старта Godot:
+
+```html
+<script>
+  window.HOLLOW_GRID_WS_URL = "wss://example.com/ws";
+</script>
+```
+
+Запуск из Godot editor/native использует `ws://127.0.0.1:8787`.
+
+## Локальный preview
+
+Из корня репозитория:
+
+```sh
+scripts/web-up.sh
+```
+
+Сайт будет доступен по адресу:
+
+```text
+http://127.0.0.1:8080/
+```
+
+Скрипт запускает `docker compose up -d --build`, собирает Node-сервер и web
+image. Web image сам скачивает Godot, устанавливает Web export templates,
+экспортирует проект и кладёт результат в nginx runtime.
+
+Порт web preview выставляется через `WEB_PORT`:
+
+```sh
+WEB_PORT=8090 scripts/web-up.sh
+```
+
+Проверка сервера:
 
 ```sh
 curl http://127.0.0.1:8787/healthz
 ```
 
-Ожидаемый ответ:
+Остановить preview:
 
-```text
-ok
+```sh
+scripts/web-down.sh
 ```
 
-## Production: Apache Virtual Host
+## Ручной Godot Web export
 
-Включи нужные модули Apache:
+Docker preview не требует локального `dist/web`. Для debug-export без Docker
+нужен установленный `godot` с Web export templates:
+
+```sh
+scripts/export-web.sh
+```
+
+Файлы попадут в `dist/web/`. `dist/` не коммитится.
+
+## Production images
+
+GitHub Actions проверяет сервер и публикует два image в GHCR на push в `main` и
+на tags `v*`:
+
+```text
+ghcr.io/skulhex/hollow-grid/server
+ghcr.io/skulhex/hollow-grid/web
+```
+
+На сервере можно указать нужные образы через `.env` рядом с `compose.yml`:
+
+```sh
+SERVER_IMAGE=ghcr.io/skulhex/hollow-grid/server:<tag>
+WEB_IMAGE=ghcr.io/skulhex/hollow-grid/web:<tag>
+WEB_PORT=8080
+```
+
+После этого деплой или обновление:
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+Если registry не используется, можно собрать images прямо на сервере:
+
+```sh
+docker compose up -d --build
+```
+
+## Apache vhost
+
+Включить модули:
 
 ```sh
 sudo a2enmod headers proxy proxy_http proxy_wstunnel ssl
 sudo systemctl reload apache2
 ```
 
-Пример HTTPS vhost:
+Базовый HTTP vhost:
 
 ```apache
-<VirtualHost *:443>
+<VirtualHost *:80>
     ServerName example.com
 
     ProxyPreserveHost On
@@ -152,40 +160,25 @@ sudo systemctl reload apache2
 
     ProxyPass "/" "http://127.0.0.1:8080/"
     ProxyPassReverse "/" "http://127.0.0.1:8080/"
-
-    SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/example.com/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/example.com/privkey.pem
 </VirtualHost>
 ```
 
-Замени `example.com` и пути к сертификатам на свой домен и реальные файлы
-сертификата. Apache в этой схеме только принимает HTTPS и проксирует трафик в
-локальный web container. Статические файлы игры уже находятся внутри web image.
+`/ws` должен быть описан до общего `ProxyPass "/"`. Замени `example.com` на
+реальный домен. Если HTTPS настраивается через certbot или другой SSL-слой, эти
+же proxy rules должны остаться в HTTPS vhost.
 
-Если игра открыта через HTTPS, браузер требует WebSocket-подключение через
-`wss://`. Godot-клиент автоматически вычисляет такой адрес:
+## Проверка после деплоя
 
-```text
-wss://<current-host>/ws
+На сервере:
+
+```sh
+docker compose ps
+curl http://127.0.0.1:8787/healthz
 ```
 
-Для локального HTTP-теста он вычисляет:
+В браузере:
 
-```text
-ws://<current-host>/ws
-```
-
-Если нужно, WebSocket URL можно переопределить до старта Godot:
-
-```html
-<script>
-  window.HOLLOW_GRID_WS_URL = "wss://example.com/ws";
-</script>
-```
-
-Запуск из Godot editor/native по-прежнему использует:
-
-```text
-ws://127.0.0.1:8787
-```
+- открыть `https://example.com/`;
+- создать комнату в первом клиенте;
+- подключиться по room code из второго клиента;
+- сделать действие и убедиться, что оба клиента получили обновление поля.
