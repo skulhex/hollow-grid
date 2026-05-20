@@ -30,7 +30,16 @@ export class HollowGridServer {
   private readonly sessions = new Map<WebSocket, ClientSession>();
 
   constructor() {
-    this.httpServer = createServer();
+    this.httpServer = createServer((request, response) => {
+      if (request.url === "/healthz") {
+        response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+        response.end("ok\n");
+        return;
+      }
+
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("not found\n");
+    });
     this.wss = new WebSocketServer({ server: this.httpServer });
     this.wss.on("connection", (socket) => this.handleConnection(socket));
   }

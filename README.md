@@ -52,6 +52,16 @@ npm run build
 
 `npm test` проверяет валидацию действий, TypeScript-порт правил матча и WebSocket room flow. `npm run build` проверяет TypeScript-компиляцию.
 
+## Web export и деплой
+
+Godot Web export генерируется в `dist/web/`:
+
+```sh
+scripts/export-web.sh
+```
+
+`dist/` не коммитится. Инструкция для Apache + Docker деплоя находится в [Deploy](docs/deploy.md).
+
 ## WebSocket MVP flow
 
 Первый клиент создаёт комнату:

@@ -6,6 +6,17 @@ const DEFAULT_ACTION_TYPE := GameAction.TYPE_PLACE_NODE
 const MODE_LOCAL := "local"
 const MODE_ONLINE := "online"
 const DEFAULT_SERVER_URL := "ws://127.0.0.1:8787"
+const WEB_SERVER_URL_SCRIPT := """
+(() => {
+	const override = globalThis.HOLLOW_GRID_WS_URL;
+	if (typeof override === "string" && override.trim() !== "") {
+		return override.trim();
+	}
+
+	const protocol = globalThis.location.protocol === "https:" ? "wss:" : "ws:";
+	return `${protocol}//${globalThis.location.host}/ws`;
+})()
+"""
 const NetworkClientScript := preload("res://scripts/network_client.gd")
 
 @onready var board_view: BoardView = $BoardView
@@ -320,6 +331,15 @@ func _connect_network_client_signals() -> void:
 	network_client.connection_status_changed.connect(_on_connection_status_changed)
 
 
+func _server_url() -> String:
+	if OS.has_feature("web"):
+		var resolved_url: Variant = JavaScriptBridge.eval(WEB_SERVER_URL_SCRIPT)
+		if resolved_url is String and not resolved_url.strip_edges().is_empty():
+			return resolved_url.strip_edges()
+
+	return DEFAULT_SERVER_URL
+
+
 func _create_online_room() -> void:
 	if not _can_start_room_request():
 		_refresh()
@@ -334,7 +354,7 @@ func _create_online_room() -> void:
 	pending_join_room_code = ""
 	network_status = "Connecting"
 	match_state.status_message = "Connecting to server"
-	var error: int = network_client.connect_to_server(DEFAULT_SERVER_URL)
+	var error: int = network_client.connect_to_server(_server_url())
 	if error != OK:
 		pending_room_request = ""
 		match_state.status_message = "Connect failed: %s" % error_string(error)
@@ -361,7 +381,7 @@ func _join_online_room(room_code: String) -> void:
 	pending_join_room_code = online_room_code
 	network_status = "Connecting"
 	match_state.status_message = "Connecting to server"
-	var error: int = network_client.connect_to_server(DEFAULT_SERVER_URL)
+	var error: int = network_client.connect_to_server(_server_url())
 	if error != OK:
 		pending_room_request = ""
 		match_state.status_message = "Connect failed: %s" % error_string(error)

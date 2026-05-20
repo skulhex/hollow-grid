@@ -1,0 +1,10 @@
+services:
+  server:
+    build:
+      context: ./server
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+    ports:
+      - "127.0.0.1:8787:8787"
+    restart: unless-stopped

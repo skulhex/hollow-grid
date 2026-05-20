@@ -15,6 +15,15 @@ describe("HollowGridServer WebSocket protocol", () => {
     server = undefined;
   });
 
+  it("serves a health check endpoint", async () => {
+    server = await startServer();
+
+    const response = await fetch(`${server.url().replace(/^ws:/, "http:")}/healthz`);
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("ok\n");
+  });
+
   it("creates and joins a two-player room", async () => {
     server = await startServer();
     const playerOne = await connect(server.url());

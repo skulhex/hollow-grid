@@ -16,8 +16,8 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_command_panel"]
-bg_color = Color(0.065, 0.078, 0.094, 0.94)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_inspector_panel"]
+bg_color = Color(0.065, 0.078, 0.094, 0.88)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -28,8 +28,8 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_inspector_panel"]
-bg_color = Color(0.065, 0.078, 0.094, 0.88)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_command_panel"]
+bg_color = Color(0.065, 0.078, 0.094, 0.94)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -51,6 +51,18 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_key_label"]
+bg_color = Color(0.12, 0.14, 0.165, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.34, 0.39, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_module_button"]
 bg_color = Color(0.078, 0.088, 0.102, 1)
@@ -87,18 +99,6 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_key_label"]
-bg_color = Color(0.12, 0.14, 0.165, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.3, 0.34, 0.39, 1)
-corner_radius_top_left = 5
-corner_radius_top_right = 5
-corner_radius_bottom_right = 5
-corner_radius_bottom_left = 5
 
 [node name="Main" type="Node2D" unique_id=1659134553]
 script = ExtResource("1_main")
@@ -328,8 +328,8 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 15
 theme_override_styles/normal = SubResource("StyleBoxFlat_module_button")
 theme_override_styles/disabled = SubResource("StyleBoxFlat_module_button")
-toggle_mode = true
 disabled = true
+toggle_mode = true
 text = "Build module"
 
 [node name="ModuleKeyLabel" type="Label" parent="HUD/Root/CommandPanel/CommandMargin/CommandVBox/ModuleRow" unique_id=358839937]
@@ -400,7 +400,7 @@ text = "R"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="NetworkToggleButton" type="Button" parent="HUD/Root"]
+[node name="NetworkToggleButton" type="Button" parent="HUD/Root" unique_id=1632348459]
 custom_minimum_size = Vector2(112, 34)
 layout_mode = 1
 anchors_preset = -1
@@ -419,7 +419,7 @@ theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Online"
 
-[node name="NetworkPanel" type="PanelContainer" parent="HUD/Root"]
+[node name="NetworkPanel" type="PanelContainer" parent="HUD/Root" unique_id=1694994558]
 visible = false
 custom_minimum_size = Vector2(314, 116)
 layout_mode = 1
@@ -436,38 +436,38 @@ grow_horizontal = 0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_inspector_panel")
 
-[node name="NetworkMargin" type="MarginContainer" parent="HUD/Root/NetworkPanel"]
+[node name="NetworkMargin" type="MarginContainer" parent="HUD/Root/NetworkPanel" unique_id=36353896]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 12
 
-[node name="NetworkVBox" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin"]
+[node name="NetworkVBox" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin" unique_id=105447070]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="NetworkTitle" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox"]
+[node name="NetworkTitle" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox" unique_id=500125539]
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 text = "ONLINE"
 
-[node name="SetupContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox"]
+[node name="SetupContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox" unique_id=1950130407]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="JoinRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer"]
+[node name="JoinRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer" unique_id=2092433574]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RoomCodeEdit" type="LineEdit" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow"]
+[node name="RoomCodeEdit" type="LineEdit" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow" unique_id=747174612]
 custom_minimum_size = Vector2(180, 30)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 13
 placeholder_text = "Room code"
 
-[node name="JoinRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow"]
+[node name="JoinRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer/JoinRow" unique_id=975364975]
 custom_minimum_size = Vector2(88, 30)
 layout_mode = 2
 focus_mode = 0
@@ -475,7 +475,7 @@ theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Join"
 
-[node name="CreateRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer"]
+[node name="CreateRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer" unique_id=310403345]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 focus_mode = 0
@@ -483,23 +483,23 @@ theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Create"
 
-[node name="LobbyContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox"]
+[node name="LobbyContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox" unique_id=2109429033]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LobbyCodeRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer"]
+[node name="LobbyCodeRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer" unique_id=242608603]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LobbyCodeLabel" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+[node name="LobbyCodeLabel" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow" unique_id=1778067163]
 custom_minimum_size = Vector2(104, 30)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Room ------"
 vertical_alignment = 1
 
-[node name="CopyCodeButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+[node name="CopyCodeButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow" unique_id=1078823559]
 custom_minimum_size = Vector2(62, 30)
 layout_mode = 2
 focus_mode = 0
@@ -507,29 +507,29 @@ theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Copy"
 
-[node name="LobbyCodeSpacer" type="Control" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+[node name="LobbyCodeSpacer" type="Control" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow" unique_id=481633590]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PlayersRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow"]
+[node name="PlayersRow" type="HBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow" unique_id=551419126]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="PlayerOneIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow"]
+[node name="PlayerOneIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow" unique_id=1100982030]
 custom_minimum_size = Vector2(34, 26)
 layout_mode = 2
 text = "P1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PlayerTwoIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow"]
+[node name="PlayerTwoIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow" unique_id=662026986]
 custom_minimum_size = Vector2(34, 26)
 layout_mode = 2
 text = "P2"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="LeaveRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer"]
+[node name="LeaveRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer" unique_id=1775463837]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 focus_mode = 0
