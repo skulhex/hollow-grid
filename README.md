@@ -60,7 +60,21 @@ Godot Web export генерируется в `dist/web/`:
 scripts/export-web.sh
 ```
 
-`dist/` не коммитится. Инструкция для Apache + Docker деплоя находится в [Deploy](docs/deploy.md).
+Для локальной проверки полного web-flow одной командой:
+
+```sh
+scripts/web-up.sh
+```
+
+После запуска сайт доступен по адресу:
+
+```text
+http://127.0.0.1:8080/
+```
+
+Godot-клиент в браузере подключается к multiplayer через `/ws`, а nginx внутри
+Docker проксирует WebSocket в Node-сервер. `dist/` не коммитится. Инструкция для
+локального preview и Apache + Docker деплоя находится в [Deploy](docs/deploy.md).
 
 ## WebSocket MVP flow
 

@@ -1,7 +1,11 @@
 # Деплой Hollow Grid
 
-Эта схема отдаёт Godot Web export через Apache, а Node WebSocket-сервер запускает
-в Docker. Apache принимает HTTPS и проксирует `/ws` в локальный Docker-контейнер.
+Есть два сценария:
+
+- локальный preview: Docker запускает Node-сервер и nginx, nginx отдаёт Godot Web
+  export и проксирует `/ws`;
+- production на Debian: Apache отдаёт Godot Web export, Node WebSocket-сервер
+  работает в Docker, Apache проксирует `/ws` в локальный контейнер.
 
 ## Сборка Web-клиента
 
@@ -19,7 +23,49 @@ dist/web/
 
 `dist/` — генерируемый артефакт, его не нужно коммитить.
 
-## Сборка и запуск сервера
+## Локальный preview через Docker
+
+Из корня репозитория:
+
+```sh
+scripts/web-up.sh
+```
+
+Скрипт:
+
+- пересобирает Godot Web export в `dist/web/`;
+- запускает `docker compose up -d --build`;
+- поднимает Node-сервер и nginx;
+- печатает URL сайта и healthcheck URL.
+
+По умолчанию сайт доступен здесь:
+
+```text
+http://127.0.0.1:8080/
+```
+
+Порт можно изменить через `WEB_PORT`:
+
+```sh
+WEB_PORT=8090 scripts/web-up.sh
+```
+
+В браузере Godot-клиент автоматически подключается к:
+
+```text
+ws://127.0.0.1:8080/ws
+```
+
+Nginx принимает `/ws` на том же origin и проксирует WebSocket в Node-сервис
+внутри compose network.
+
+Остановить локальный preview:
+
+```sh
+scripts/web-down.sh
+```
+
+## Production: Node-сервер в Docker
 
 Из корня репозитория:
 
@@ -45,7 +91,7 @@ curl http://127.0.0.1:8787/healthz
 ok
 ```
 
-## Публикация статических файлов
+## Production: публикация статических файлов
 
 Скопируй или синхронизируй web-сборку в document root Apache:
 
@@ -54,7 +100,7 @@ sudo mkdir -p /var/www/hollow-grid
 sudo rsync -a --delete dist/web/ /var/www/hollow-grid/
 ```
 
-## Apache Virtual Host
+## Production: Apache Virtual Host
 
 Включи нужные модули Apache:
 
