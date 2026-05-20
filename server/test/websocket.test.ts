@@ -3,6 +3,20 @@ import { WebSocket } from "ws";
 import { HollowGridServer } from "../src/net/hollowGridServer.js";
 import type { ServerMessage } from "../src/net/messages.js";
 
+type MessageWaiter = {
+  resolve: (message: ServerMessage) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+type MessageInbox = {
+  messages: ServerMessage[];
+  waiters: MessageWaiter[];
+  error?: Error;
+};
+
+const inboxes = new WeakMap<WebSocket, MessageInbox>();
+
 describe("HollowGridServer WebSocket protocol", () => {
   let server: HollowGridServer | undefined;
   const clients: WebSocket[] = [];
@@ -80,7 +94,10 @@ describe("HollowGridServer WebSocket protocol", () => {
 
     playerTwo.send(JSON.stringify({ type: "join_room", room_code: created.room_code }));
     await nextMessage(playerTwo);
-    await nextMessage(playerOne);
+    const playerOneNotified = await nextMessage(playerOne);
+    const playerTwoNotified = await nextMessage(playerTwo);
+    expect(playerOneNotified.type).toBe("player_joined");
+    expect(playerTwoNotified.type).toBe("player_joined");
 
     playerTwo.send(
       JSON.stringify({
@@ -147,18 +164,76 @@ async function startServer(): Promise<HollowGridServer> {
 function connect(url: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
-    socket.once("open", () => resolve(socket));
+    socket.once("open", () => {
+      getInbox(socket);
+      resolve(socket);
+    });
     socket.once("error", reject);
   });
 }
 
 function nextMessage(socket: WebSocket): Promise<ServerMessage> {
+  const inbox = getInbox(socket);
+  const message = inbox.messages.shift();
+
+  if (message) {
+    return Promise.resolve(message);
+  }
+
+  if (inbox.error) {
+    return Promise.reject(inbox.error);
+  }
+
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Timed out waiting for WebSocket message")), 1000);
-    socket.once("message", (data) => {
-      clearTimeout(timer);
-      resolve(JSON.parse(data.toString("utf8")) as ServerMessage);
-    });
-    socket.once("error", reject);
+    const waiter: MessageWaiter = {
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        const index = inbox.waiters.indexOf(waiter);
+        if (index >= 0) {
+          inbox.waiters.splice(index, 1);
+        }
+        reject(new Error("Timed out waiting for WebSocket message"));
+      }, 1000)
+    };
+
+    inbox.waiters.push(waiter);
   });
+}
+
+function getInbox(socket: WebSocket): MessageInbox {
+  const existing = inboxes.get(socket);
+  if (existing) {
+    return existing;
+  }
+
+  const inbox: MessageInbox = {
+    messages: [],
+    waiters: []
+  };
+
+  socket.on("message", (data) => {
+    const message = JSON.parse(data.toString("utf8")) as ServerMessage;
+    const waiter = inbox.waiters.shift();
+
+    if (!waiter) {
+      inbox.messages.push(message);
+      return;
+    }
+
+    clearTimeout(waiter.timer);
+    waiter.resolve(message);
+  });
+
+  socket.on("error", (error) => {
+    inbox.error = error;
+
+    for (const waiter of inbox.waiters.splice(0)) {
+      clearTimeout(waiter.timer);
+      waiter.reject(error);
+    }
+  });
+
+  inboxes.set(socket, inbox);
+  return inbox;
 }

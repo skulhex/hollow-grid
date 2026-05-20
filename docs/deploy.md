@@ -68,30 +68,38 @@ dist/web/
 
 `dist/` — генерируемый артефакт, его не нужно коммитить.
 
-## Production: сборка и публикация images
+## Production: сборка и публикация images через GitHub Actions
 
-Для production лучше публиковать оба Docker image в registry, например GHCR.
-На машине сборки или в CI:
+GitHub Actions публикует два image в GHCR на push в `main` и на tags `v*`:
 
-```sh
-SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
-WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
-docker compose build
-
-SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
-WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
-docker compose push
+```text
+ghcr.io/<owner>/<repo>/server
+ghcr.io/<owner>/<repo>/web
 ```
 
-На Debian-сервере после этого используй те же image names:
+На `main` публикуются tags `main`, `main-<short-sha>`, `sha-<short-sha>` и
+`latest`. На release tag `v1.2.3` публикуются `v1.2.3` и `sha-<short-sha>`.
+
+Если GitHub не даёт workflow публиковать packages, проверь настройки
+репозитория: `Settings -> Actions -> General -> Workflow permissions`. Для
+публикации в GHCR у `GITHUB_TOKEN` должно быть право записи.
+
+Если package visibility приватная, на Debian-сервере нужно один раз выполнить
+`docker login ghcr.io` с GitHub token, у которого есть право читать packages:
 
 ```sh
-SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
-WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
+docker login ghcr.io
+```
+
+Для ручного обновления на Debian используй:
+
+```sh
+SERVER_IMAGE=ghcr.io/<owner>/<repo>/server:<tag> \
+WEB_IMAGE=ghcr.io/<owner>/<repo>/web:<tag> \
 docker compose pull
 
-SERVER_IMAGE=ghcr.io/<owner>/hollow-grid-server:<tag> \
-WEB_IMAGE=ghcr.io/<owner>/hollow-grid-web:<tag> \
+SERVER_IMAGE=ghcr.io/<owner>/<repo>/server:<tag> \
+WEB_IMAGE=ghcr.io/<owner>/<repo>/web:<tag> \
 docker compose up -d
 ```
 
