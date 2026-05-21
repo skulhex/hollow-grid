@@ -119,12 +119,12 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="StatusPanel" type="PanelContainer" parent="HUD/Root" unique_id=1014467830]
-custom_minimum_size = Vector2(340, 176)
+custom_minimum_size = Vector2(340, 196)
 layout_mode = 1
 offset_left = 18.0
 offset_top = 18.0
 offset_right = 358.0
-offset_bottom = 194.0
+offset_bottom = 214.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_status_panel")
 
@@ -142,7 +142,16 @@ theme_override_constants/separation = 5
 [node name="TurnLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=62877675]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
-text = "Player 1"
+text = "Player 1 turn"
+clip_text = true
+
+[node name="PlayerIdentityLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Local sandbox"
+clip_text = true
+vertical_alignment = 1
 
 [node name="CoreHpLabel" type="Label" parent="HUD/Root/StatusPanel/StatusMargin/StatusVBox" unique_id=1740033915]
 layout_mode = 2
@@ -174,9 +183,9 @@ custom_minimum_size = Vector2(340, 192)
 layout_mode = 1
 anchors_preset = -1
 offset_left = 18.0
-offset_top = 218.0
+offset_top = 238.0
 offset_right = 358.0
-offset_bottom = 410.0
+offset_bottom = 430.0
 grow_horizontal = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_inspector_panel")
@@ -421,7 +430,7 @@ text = "Online"
 
 [node name="NetworkPanel" type="PanelContainer" parent="HUD/Root" unique_id=1694994558]
 visible = false
-custom_minimum_size = Vector2(314, 116)
+custom_minimum_size = Vector2(314, 160)
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
@@ -429,7 +438,7 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -332.0
-offset_top = -180.0
+offset_top = -224.0
 offset_right = -18.0
 offset_bottom = -64.0
 grow_horizontal = 0
@@ -453,6 +462,7 @@ theme_override_font_sizes/font_size = 13
 text = "ONLINE"
 
 [node name="SetupContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox" unique_id=1950130407]
+custom_minimum_size = Vector2(0, 110)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -483,8 +493,13 @@ theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Create"
 
+[node name="SetupReserve" type="Control" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/SetupContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+
 [node name="LobbyContainer" type="VBoxContainer" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox" unique_id=2109429033]
 visible = false
+custom_minimum_size = Vector2(0, 110)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -493,14 +508,16 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="LobbyCodeLabel" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow" unique_id=1778067163]
-custom_minimum_size = Vector2(104, 30)
+custom_minimum_size = Vector2(118, 34)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
 text = "Room ------"
+autowrap_mode = 3
 vertical_alignment = 1
 
 [node name="CopyCodeButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow" unique_id=1078823559]
-custom_minimum_size = Vector2(62, 30)
+custom_minimum_size = Vector2(48, 28)
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 13
@@ -516,14 +533,14 @@ layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="PlayerOneIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow" unique_id=1100982030]
-custom_minimum_size = Vector2(34, 26)
+custom_minimum_size = Vector2(38, 34)
 layout_mode = 2
 text = "P1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="PlayerTwoIndicator" type="Label" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow" unique_id=662026986]
-custom_minimum_size = Vector2(34, 26)
+custom_minimum_size = Vector2(38, 34)
 layout_mode = 2
 text = "P2"
 horizontal_alignment = 1
@@ -536,6 +553,14 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
 text = "Leave room"
+
+[node name="ReconnectRoomButton" type="Button" parent="HUD/Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_utility_button")
+text = "Reconnect"
 
 [node name="UpgradePopup" type="PopupMenu" parent="HUD/Root" unique_id=920608351]
 position = Vector2i(936, 184)

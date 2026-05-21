@@ -8,6 +8,7 @@ signal skip_requested
 signal restart_requested
 signal online_create_requested
 signal online_join_requested(room_code: String)
+signal online_reconnect_requested
 signal online_leave_requested
 
 const ACTION_UPGRADE_NODE := "upgrade_node"
@@ -24,6 +25,7 @@ const MENU_REPAIR_MODULE := 6
 @onready var inspector_panel: PanelContainer = $Root/InspectorPanel
 @onready var network_panel: PanelContainer = $Root/NetworkPanel
 @onready var turn_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/TurnLabel
+@onready var player_identity_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/PlayerIdentityLabel
 @onready var core_hp_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/CoreHpLabel
 @onready var action_limit_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ActionLimitLabel
 @onready var resource_label: Label = $Root/StatusPanel/StatusMargin/StatusVBox/ResourceLabel
@@ -47,6 +49,7 @@ const MENU_REPAIR_MODULE := 6
 @onready var copy_code_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/CopyCodeButton
 @onready var player_one_indicator: Label = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow/PlayerOneIndicator
 @onready var player_two_indicator: Label = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LobbyCodeRow/PlayersRow/PlayerTwoIndicator
+@onready var reconnect_room_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/ReconnectRoomButton
 @onready var leave_room_button: Button = $Root/NetworkPanel/NetworkMargin/NetworkVBox/LobbyContainer/LeaveRoomButton
 @onready var inspector_title: Label = $Root/InspectorPanel/InspectorMargin/InspectorVBox/InspectorTitle
 @onready var inspector_cell_label: Label = $Root/InspectorPanel/InspectorMargin/InspectorVBox/InspectorCellLabel
@@ -83,6 +86,7 @@ func _ready() -> void:
 	create_room_button.pressed.connect(_on_create_room_pressed)
 	join_room_button.pressed.connect(_on_join_room_pressed)
 	copy_code_button.pressed.connect(_on_copy_code_pressed)
+	reconnect_room_button.pressed.connect(_on_reconnect_room_pressed)
 	leave_room_button.pressed.connect(_on_leave_room_pressed)
 	room_code_edit.text_changed.connect(_on_network_text_changed)
 	room_code_edit.text_submitted.connect(_on_room_code_submitted)
@@ -94,7 +98,7 @@ func _ready() -> void:
 func refresh(match_state: MatchState, selected_action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE, hover_cell: Vector2i = BoardView.HOVER_NONE, network_state: Dictionary = {}) -> void:
 	current_network_state = network_state.duplicate()
 	current_selected_action_type = selected_action_type
-	turn_label.text = GameDefs.player_label(match_state.current_player)
+	turn_label.text = "%s turn" % GameDefs.player_label(match_state.current_player)
 	turn_label.add_theme_color_override("font_color", GameDefs.player_color(match_state.current_player))
 
 	core_hp_label.text = "Core HP: P1 %d / P2 %d" % [
@@ -112,6 +116,7 @@ func refresh(match_state: MatchState, selected_action_type: String, striker_atta
 	preview_label.text = _format_next_turn_preview(match_state)
 	selected_label.text = "Selected: %s" % _action_label(selected_action_type, striker_attack_source, hacker_hack_source)
 	status_label.text = match_state.status_message
+	_refresh_player_identity(match_state, network_state)
 
 	place_button.button_pressed = selected_action_type == GameAction.TYPE_PLACE_NODE
 	repair_button.button_pressed = selected_action_type == GameAction.TYPE_REPAIR_NODE
@@ -130,7 +135,7 @@ func refresh(match_state: MatchState, selected_action_type: String, striker_atta
 func show_upgrade_menu(screen_position: Vector2, target_cell: Vector2i) -> void:
 	upgrade_target_cell = target_cell
 	upgrade_popup.clear()
-	upgrade_popup.add_item("Harvester (%dR)" % MatchState.HARVESTER_UPGRADE_RESOURCE_COST, MENU_HARVESTER)
+	upgrade_popup.add_item("Harvester (free)" if MatchState.HARVESTER_UPGRADE_RESOURCE_COST == 0 else "Harvester (%dR)" % MatchState.HARVESTER_UPGRADE_RESOURCE_COST, MENU_HARVESTER)
 	upgrade_popup.add_item("Striker (%dR)" % MatchState.STRIKER_UPGRADE_RESOURCE_COST, MENU_STRIKER)
 	upgrade_popup.add_item("Defender (%dR)" % MatchState.DEFENDER_UPGRADE_RESOURCE_COST, MENU_DEFENDER)
 	upgrade_popup.add_item("Hacker (%dR)" % MatchState.HACKER_UPGRADE_RESOURCE_COST, MENU_HACKER)
@@ -151,12 +156,15 @@ func show_module_menu(screen_position: Vector2, target_cell: Vector2i) -> void:
 
 func _refresh_button_states(match_state: MatchState, network_state: Dictionary) -> void:
 	var gameplay_locked := _gameplay_locked(match_state, network_state)
+	var lock_reason := _gameplay_lock_reason(match_state, network_state)
 	place_button.disabled = gameplay_locked or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_PLACE_NODE)
 	repair_button.disabled = gameplay_locked or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_REPAIR_NODE)
 	upgrade_button.disabled = gameplay_locked or not _player_has_upgrade_option(match_state)
 	module_button.disabled = gameplay_locked or not match_state.can_afford_action(match_state.current_player, GameAction.TYPE_BUILD_CONNECTION_MODULE)
 	skip_button.disabled = gameplay_locked
 	restart_button.disabled = str(network_state.get("mode", "local")) == "online"
+	for button in [place_button, repair_button, upgrade_button, module_button, skip_button]:
+		button.tooltip_text = lock_reason
 
 
 func _refresh_network_state(network_state: Dictionary) -> void:
@@ -165,6 +173,8 @@ func _refresh_network_state(network_state: Dictionary) -> void:
 	var assigned_player := str(network_state.get("assigned_player", ""))
 	var players: Array = _players_from_network_state(network_state)
 	var pending_room_request := str(network_state.get("pending_room_request", ""))
+	var connected := bool(network_state.get("connected", false))
+	var reconnect_available := bool(network_state.get("reconnect_available", false))
 	var is_online := mode == "online"
 	var in_room := is_online and not room_code.is_empty() and not assigned_player.is_empty()
 	var is_busy := is_online and pending_room_request != ""
@@ -175,13 +185,37 @@ func _refresh_network_state(network_state: Dictionary) -> void:
 	setup_container.visible = not in_room
 	lobby_container.visible = in_room
 	create_room_button.disabled = is_busy or in_room
-	join_room_button.disabled = is_busy or in_room or room_code_edit.text.strip_edges().is_empty()
+	join_room_button.disabled = is_busy or in_room or _normalized_room_code(room_code_edit.text).is_empty()
 	lobby_code_label.text = "Room %s" % room_code
 	copy_code_button.text = "Copy"
-	player_one_indicator.text = "P1"
-	player_two_indicator.text = "P2"
-	_set_player_indicator(player_one_indicator, GameDefs.PLAYER_ONE in players or assigned_player == GameDefs.PLAYER_ONE, GameDefs.PLAYER_ONE)
-	_set_player_indicator(player_two_indicator, GameDefs.PLAYER_TWO in players or assigned_player == GameDefs.PLAYER_TWO, GameDefs.PLAYER_TWO)
+	_set_player_indicator(player_one_indicator, GameDefs.PLAYER_ONE in players, GameDefs.PLAYER_ONE, assigned_player == GameDefs.PLAYER_ONE)
+	_set_player_indicator(player_two_indicator, GameDefs.PLAYER_TWO in players, GameDefs.PLAYER_TWO, assigned_player == GameDefs.PLAYER_TWO)
+	reconnect_room_button.disabled = is_busy or connected
+	reconnect_room_button.text = "Reconnect as %s" % GameDefs.player_label(assigned_player) if reconnect_available else "Connected as %s" % GameDefs.player_label(assigned_player)
+	leave_room_button.text = "Leave room"
+
+
+func _refresh_player_identity(match_state: MatchState, network_state: Dictionary) -> void:
+	var mode := str(network_state.get("mode", "local"))
+	if mode != "online":
+		player_identity_label.visible = true
+		player_identity_label.text = "Local sandbox"
+		player_identity_label.add_theme_color_override("font_color", Color(0.72, 0.76, 0.82))
+		return
+
+	var assigned_player := str(network_state.get("assigned_player", ""))
+	player_identity_label.visible = true
+	if assigned_player.is_empty():
+		player_identity_label.text = "Online connecting"
+		player_identity_label.add_theme_color_override("font_color", Color(0.72, 0.76, 0.82))
+		return
+
+	var connected := bool(network_state.get("connected", false))
+	var mode_text := "Online as %s" % GameDefs.player_label(assigned_player)
+	if not connected:
+		mode_text = "Offline as %s" % GameDefs.player_label(assigned_player)
+	player_identity_label.text = mode_text
+	player_identity_label.add_theme_color_override("font_color", GameDefs.player_color(assigned_player))
 
 
 func _gameplay_locked(match_state: MatchState, network_state: Dictionary) -> bool:
@@ -202,6 +236,29 @@ func _gameplay_locked(match_state: MatchState, network_state: Dictionary) -> boo
 		return true
 
 	return assigned_player != match_state.current_player
+
+
+func _gameplay_lock_reason(match_state: MatchState, network_state: Dictionary) -> String:
+	if match_state.finished:
+		return "Match finished"
+
+	if str(network_state.get("mode", "local")) != "online":
+		return ""
+
+	if not bool(network_state.get("connected", false)):
+		return "Reconnect to continue"
+
+	var assigned_player := str(network_state.get("assigned_player", ""))
+	if assigned_player.is_empty():
+		return "Waiting for room assignment"
+
+	if bool(network_state.get("pending_action", false)):
+		return "Waiting for server snapshot"
+
+	if assigned_player != match_state.current_player:
+		return "Waiting for %s" % GameDefs.player_label(match_state.current_player)
+
+	return ""
 
 
 func is_text_input_focused() -> bool:
@@ -230,7 +287,7 @@ func _refresh_inspector(match_state: MatchState, hover_cell: Vector2i) -> void:
 	if match_state.is_control_point(hover_cell):
 		var control_owner := match_state.control_point_owner(hover_cell)
 		inspector_owner_label.text = "Owner: %s" % _owner_label(control_owner)
-		inspector_state_label.text = "Role: Control point"
+		inspector_state_label.text = "Role: Resource site"
 		inspector_ready_label.text = "Ready: passive"
 		inspector_actions_label.text = "Actions: %s" % _possible_actions_text(match_state, hover_cell)
 		return
@@ -374,6 +431,7 @@ func _apply_theme() -> void:
 	network_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.065, 0.078, 0.094, 0.88)))
 
 	turn_label.add_theme_font_size_override("font_size", 20)
+	player_identity_label.add_theme_font_size_override("font_size", 14)
 	core_hp_label.add_theme_font_size_override("font_size", 15)
 	action_limit_label.add_theme_font_size_override("font_size", 15)
 	resource_label.add_theme_font_size_override("font_size", 15)
@@ -384,6 +442,7 @@ func _apply_theme() -> void:
 	inspector_title.add_theme_font_size_override("font_size", 13)
 
 	for label in [
+		player_identity_label,
 		core_hp_label,
 		action_limit_label,
 		resource_label,
@@ -411,6 +470,7 @@ func _apply_theme() -> void:
 	_style_utility_button(create_room_button)
 	_style_utility_button(join_room_button)
 	_style_utility_button(copy_code_button)
+	_style_utility_button(reconnect_room_button)
 	_style_utility_button(leave_room_button)
 	_style_line_edit(room_code_edit)
 	lobby_code_label.add_theme_font_size_override("font_size", 16)
@@ -578,8 +638,8 @@ func _on_create_room_pressed() -> void:
 
 
 func _on_join_room_pressed() -> void:
+	online_join_requested.emit(_normalized_room_code(room_code_edit.text))
 	_release_network_focus()
-	online_join_requested.emit(room_code_edit.text.strip_edges())
 
 
 func _on_copy_code_pressed() -> void:
@@ -591,7 +651,18 @@ func _on_copy_code_pressed() -> void:
 	copy_code_button.text = "Copied"
 
 
-func _on_network_text_changed(_text: String) -> void:
+func _on_reconnect_room_pressed() -> void:
+	online_reconnect_requested.emit()
+	_release_network_focus()
+
+
+func _on_network_text_changed(text: String) -> void:
+	var normalized := _normalized_room_code(text)
+	if text != normalized:
+		var caret := room_code_edit.caret_column
+		room_code_edit.text = normalized
+		room_code_edit.caret_column = mini(caret, normalized.length())
+
 	_refresh_network_state(current_network_state)
 
 
@@ -609,6 +680,10 @@ func _release_network_focus() -> void:
 	room_code_edit.release_focus()
 
 
+func _normalized_room_code(text: String) -> String:
+	return text.strip_edges().to_upper()
+
+
 func _players_from_network_state(network_state: Dictionary) -> Array:
 	var value: Variant = network_state.get("players", [])
 	if value is Array:
@@ -617,11 +692,23 @@ func _players_from_network_state(network_state: Dictionary) -> Array:
 	return []
 
 
-func _set_player_indicator(label: Label, present: bool, player: String) -> void:
+func _set_player_indicator(label: Label, present: bool, player: String, is_self: bool) -> void:
 	var color := GameDefs.player_color(player)
+	label.text = _short_player_label(player)
 	label.add_theme_font_size_override("font_size", 12)
 	label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0) if present else Color(0.38, 0.42, 0.48))
-	label.add_theme_stylebox_override("normal", _button_style(color.darkened(0.25) if present else Color(0.07, 0.08, 0.095), color if present else Color(0.18, 0.2, 0.23)))
+	var fill := color.darkened(0.2) if present else Color(0.07, 0.08, 0.095)
+	var border := Color(1.0, 1.0, 1.0) if is_self else color if present else Color(0.18, 0.2, 0.23)
+	label.add_theme_stylebox_override("normal", _button_style(fill, border))
+	label.tooltip_text = "%s%s" % [GameDefs.player_label(player), " (you)" if is_self else ""] if present else "%s disconnected" % GameDefs.player_label(player)
+
+
+func _short_player_label(player: String) -> String:
+	if player == GameDefs.PLAYER_ONE:
+		return "P1"
+	if player == GameDefs.PLAYER_TWO:
+		return "P2"
+	return "P?"
 
 
 func _action_label(action_type: String, striker_attack_source: Vector2i = BoardView.HOVER_NONE, hacker_hack_source: Vector2i = BoardView.HOVER_NONE) -> String:

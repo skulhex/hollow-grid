@@ -6,6 +6,7 @@ const DEFAULT_ACTION_TYPE := GameAction.TYPE_PLACE_NODE
 const MODE_LOCAL := "local"
 const MODE_ONLINE := "online"
 const DEFAULT_SERVER_URL := "ws://127.0.0.1:8787"
+const ROOM_REQUEST_TIMEOUT_MS := 8000
 const WEB_SERVER_URL_SCRIPT := """
 (() => {
 	const override = globalThis.HOLLOW_GRID_WS_URL;
@@ -35,6 +36,8 @@ var online_players: Array[String] = []
 var network_status := "Local sandbox"
 var pending_room_request := ""
 var pending_join_room_code := ""
+var pending_join_player := ""
+var pending_room_request_started_msec := 0
 var pending_action: Dictionary = {}
 
 
@@ -49,6 +52,7 @@ func _ready() -> void:
 	hud.restart_requested.connect(_restart_match)
 	hud.online_create_requested.connect(_create_online_room)
 	hud.online_join_requested.connect(_join_online_room)
+	hud.online_reconnect_requested.connect(_reconnect_online_room)
 	hud.online_leave_requested.connect(_leave_online_room)
 	_connect_network_client_signals()
 
@@ -61,6 +65,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	network_client.poll()
+	_check_room_request_timeout()
 
 
 func _input(event: InputEvent) -> void:
@@ -326,6 +331,7 @@ func _connect_network_client_signals() -> void:
 	network_client.room_created.connect(_on_room_created)
 	network_client.joined.connect(_on_room_joined)
 	network_client.player_joined.connect(_on_player_joined)
+	network_client.presence_updated.connect(_on_presence_updated)
 	network_client.snapshot_received.connect(_on_snapshot_received)
 	network_client.error_received.connect(_on_network_error)
 	network_client.connection_status_changed.connect(_on_connection_status_changed)
@@ -352,11 +358,14 @@ func _create_online_room() -> void:
 	pending_action.clear()
 	pending_room_request = "create"
 	pending_join_room_code = ""
+	pending_join_player = ""
+	pending_room_request_started_msec = Time.get_ticks_msec()
 	network_status = "Connecting"
 	match_state.status_message = "Connecting to server"
 	var error: int = network_client.connect_to_server(_server_url())
 	if error != OK:
 		pending_room_request = ""
+		pending_room_request_started_msec = 0
 		match_state.status_message = "Connect failed: %s" % error_string(error)
 	_refresh()
 
@@ -379,12 +388,48 @@ func _join_online_room(room_code: String) -> void:
 	pending_action.clear()
 	pending_room_request = "join"
 	pending_join_room_code = online_room_code
+	pending_join_player = ""
+	pending_room_request_started_msec = Time.get_ticks_msec()
 	network_status = "Connecting"
-	match_state.status_message = "Connecting to server"
+	match_state.status_message = "Joining %s..." % pending_join_room_code
 	var error: int = network_client.connect_to_server(_server_url())
 	if error != OK:
 		pending_room_request = ""
+		pending_room_request_started_msec = 0
 		match_state.status_message = "Connect failed: %s" % error_string(error)
+	_refresh()
+
+
+func _reconnect_online_room() -> void:
+	if pending_room_request != "":
+		match_state.status_message = "Network request is already in progress"
+		_refresh()
+		return
+
+	if online_room_code.is_empty() or assigned_player.is_empty():
+		match_state.status_message = "No online room to reconnect"
+		_refresh()
+		return
+
+	if network_client.is_socket_connected():
+		match_state.status_message = "Already connected"
+		_refresh()
+		return
+
+	mode = MODE_ONLINE
+	online_players.clear()
+	pending_action.clear()
+	pending_room_request = "join"
+	pending_join_room_code = online_room_code
+	pending_join_player = assigned_player
+	pending_room_request_started_msec = Time.get_ticks_msec()
+	network_status = "Reconnecting"
+	match_state.status_message = "Reconnecting as %s..." % GameDefs.player_label(assigned_player)
+	var error: int = network_client.connect_to_server(_server_url())
+	if error != OK:
+		pending_room_request = ""
+		pending_room_request_started_msec = 0
+		match_state.status_message = "Reconnect failed: %s" % error_string(error)
 	_refresh()
 
 
@@ -393,12 +438,45 @@ func _on_network_connected() -> void:
 		var error: int = network_client.create_room()
 		if error != OK:
 			pending_room_request = ""
+			pending_room_request_started_msec = 0
 			match_state.status_message = "Create room failed: %s" % error_string(error)
 	elif pending_room_request == "join":
-		var error: int = network_client.join_room(pending_join_room_code)
+		var error: int = network_client.join_room(pending_join_room_code, pending_join_player)
 		if error != OK:
 			pending_room_request = ""
+			pending_room_request_started_msec = 0
 			match_state.status_message = "Join room failed: %s" % error_string(error)
+
+	_refresh()
+
+
+func _check_room_request_timeout() -> void:
+	if pending_room_request == "" or pending_room_request_started_msec <= 0:
+		return
+
+	var elapsed := Time.get_ticks_msec() - pending_room_request_started_msec
+	if elapsed < ROOM_REQUEST_TIMEOUT_MS:
+		return
+
+	var timed_out_request := pending_room_request
+	var timed_out_player := pending_join_player
+	pending_room_request = ""
+	pending_join_room_code = ""
+	pending_join_player = ""
+	pending_room_request_started_msec = 0
+	pending_action.clear()
+	network_client.disconnect_from_server()
+
+	if not assigned_player.is_empty() and not online_room_code.is_empty():
+		network_status = "Disconnected"
+		match_state.status_message = "Reconnect timed out"
+	else:
+		mode = MODE_LOCAL
+		assigned_player = ""
+		online_room_code = ""
+		online_players.clear()
+		network_status = "Local sandbox"
+		match_state.status_message = "%s timed out" % ("Reconnect" if not timed_out_player.is_empty() else "Connection" if timed_out_request == "create" else "Join")
 
 	_refresh()
 
@@ -408,12 +486,18 @@ func _on_network_disconnected() -> void:
 	online_players.clear()
 	pending_action.clear()
 	pending_room_request = ""
-	match_state.status_message = "Disconnected from server"
+	pending_room_request_started_msec = 0
+	if not assigned_player.is_empty() and not online_room_code.is_empty():
+		match_state.status_message = "Disconnected. Reconnect as %s" % GameDefs.player_label(assigned_player)
+	else:
+		match_state.status_message = "Disconnected from server"
 	_refresh()
 
 
 func _on_room_created(room_code: String, player: String, snapshot: Dictionary) -> void:
 	pending_room_request = ""
+	pending_room_request_started_msec = 0
+	pending_join_player = ""
 	online_room_code = room_code
 	assigned_player = player
 	online_players.assign([player])
@@ -423,9 +507,11 @@ func _on_room_created(room_code: String, player: String, snapshot: Dictionary) -
 
 func _on_room_joined(room_code: String, player: String, snapshot: Dictionary) -> void:
 	pending_room_request = ""
+	pending_room_request_started_msec = 0
+	pending_join_player = ""
 	online_room_code = room_code
 	assigned_player = player
-	online_players.assign([GameDefs.PLAYER_ONE, player])
+	online_players.assign([player])
 	network_status = "Room %s as %s" % [online_room_code, GameDefs.player_label(assigned_player)]
 	_apply_server_snapshot(snapshot)
 
@@ -439,6 +525,16 @@ func _on_player_joined(players: Array, snapshot: Dictionary) -> void:
 	_apply_server_snapshot(snapshot)
 
 
+func _on_presence_updated(_players: Array, connected_players: Array, snapshot: Dictionary) -> void:
+	online_players.clear()
+	for player in connected_players:
+		online_players.append(str(player))
+
+	if not assigned_player.is_empty():
+		network_status = "Room %s - %s" % [online_room_code, GameDefs.player_label(assigned_player)]
+	_apply_server_snapshot(snapshot)
+
+
 func _on_snapshot_received(snapshot: Dictionary) -> void:
 	_apply_server_snapshot(snapshot)
 
@@ -446,6 +542,8 @@ func _on_snapshot_received(snapshot: Dictionary) -> void:
 func _on_network_error(message: String) -> void:
 	pending_action.clear()
 	pending_room_request = ""
+	pending_room_request_started_msec = 0
+	pending_join_player = ""
 	match_state.status_message = message
 	_refresh()
 
@@ -468,6 +566,8 @@ func _leave_online_room() -> void:
 	pending_action.clear()
 	pending_room_request = ""
 	pending_join_room_code = ""
+	pending_join_player = ""
+	pending_room_request_started_msec = 0
 	network_status = "Local sandbox"
 	match_state.setup_match()
 	selected_action_type = DEFAULT_ACTION_TYPE
@@ -582,6 +682,7 @@ func _network_hud_state() -> Dictionary:
 		"players": online_players,
 		"pending_action": not pending_action.is_empty(),
 		"pending_room_request": pending_room_request,
+		"reconnect_available": mode == MODE_ONLINE and not online_room_code.is_empty() and not assigned_player.is_empty() and not network_client.is_socket_connected(),
 		"status": network_status,
 	}
 

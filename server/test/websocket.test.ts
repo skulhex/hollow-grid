@@ -60,6 +60,11 @@ describe("HollowGridServer WebSocket protocol", () => {
     expect(notified.type).toBe("player_joined");
     if (notified.type !== "player_joined") throw new Error("Expected player_joined");
     expect(notified.players).toEqual(["player_1", "player_2"]);
+    const joinedBroadcast = await nextMessage(playerTwo);
+    expect(joinedBroadcast.type).toBe("player_joined");
+
+    await expectPresence(playerOne, ["player_1", "player_2"]);
+    await expectPresence(playerTwo, ["player_1", "player_2"]);
   });
 
   it("rejects a third player from a full room", async () => {
@@ -76,10 +81,101 @@ describe("HollowGridServer WebSocket protocol", () => {
     playerTwo.send(JSON.stringify({ type: "join_room", room_code: created.room_code }));
     await nextMessage(playerTwo);
     await nextMessage(playerOne);
+    await nextMessage(playerOne);
+    await nextMessage(playerTwo);
 
     third.send(JSON.stringify({ type: "join_room", room_code: created.room_code }));
     const rejected = await nextMessage(third);
     expect(rejected).toEqual({ type: "error", message: "Room is full" });
+  });
+
+  it("lets a disconnected player reclaim their slot", async () => {
+    server = await startServer();
+    const playerOne = await connect(server.url());
+    const playerTwo = await connect(server.url());
+    clients.push(playerOne, playerTwo);
+
+    playerOne.send(JSON.stringify({ type: "create_room" }));
+    const created = await nextMessage(playerOne);
+    if (created.type !== "room_created") throw new Error("Expected room_created");
+
+    playerTwo.send(JSON.stringify({ type: "join_room", room_code: created.room_code }));
+    await nextMessage(playerTwo);
+    await nextMessage(playerOne);
+    await nextMessage(playerTwo);
+    await expectPresence(playerOne, ["player_1", "player_2"]);
+    await expectPresence(playerTwo, ["player_1", "player_2"]);
+
+    playerOne.close();
+    await expectPresence(playerTwo, ["player_2"]);
+
+    const rejoinedPlayerOne = await connect(server.url());
+    clients.push(rejoinedPlayerOne);
+    rejoinedPlayerOne.send(JSON.stringify({ type: "join_room", room_code: created.room_code, player: "player_1" }));
+
+    const rejoined = await nextMessage(rejoinedPlayerOne);
+    expect(rejoined.type).toBe("joined");
+    if (rejoined.type !== "joined") throw new Error("Expected joined");
+    expect(rejoined.player).toBe("player_1");
+
+    await nextMessage(playerTwo);
+    await nextMessage(rejoinedPlayerOne);
+    await expectPresence(playerTwo, ["player_1", "player_2"]);
+    await expectPresence(rejoinedPlayerOne, ["player_1", "player_2"]);
+
+    rejoinedPlayerOne.send(
+      JSON.stringify({
+        type: "action",
+        action: { type: "place_node", player: "player_1", cell: { q: -2, r: 0 } }
+      })
+    );
+
+    const p1Snapshot = await nextMessage(rejoinedPlayerOne);
+    const p2Snapshot = await nextMessage(playerTwo);
+    expect(p1Snapshot.type).toBe("snapshot");
+    expect(p2Snapshot.type).toBe("snapshot");
+  });
+
+  it("rejects reclaiming an occupied preferred slot", async () => {
+    server = await startServer();
+    const playerOne = await connect(server.url());
+    const third = await connect(server.url());
+    clients.push(playerOne, third);
+
+    playerOne.send(JSON.stringify({ type: "create_room" }));
+    const created = await nextMessage(playerOne);
+    if (created.type !== "room_created") throw new Error("Expected room_created");
+
+    third.send(JSON.stringify({ type: "join_room", room_code: created.room_code, player: "player_1" }));
+    expect(await nextMessage(third)).toEqual({ type: "error", message: "Player already connected" });
+  });
+
+  it("keeps an empty room briefly and expires it after the empty-room TTL", async () => {
+    server = new HollowGridServer({ roomEmptyTtlMs: 20 });
+    await server.listen({ port: 0 });
+    const playerOne = await connect(server.url());
+    clients.push(playerOne);
+
+    playerOne.send(JSON.stringify({ type: "create_room" }));
+    const created = await nextMessage(playerOne);
+    if (created.type !== "room_created") throw new Error("Expected room_created");
+
+    await closeSocket(playerOne);
+    await delay(5);
+
+    const quickRejoin = await connect(server.url());
+    clients.push(quickRejoin);
+    quickRejoin.send(JSON.stringify({ type: "join_room", room_code: created.room_code, player: "player_1" }));
+    const rejoined = await nextMessage(quickRejoin);
+    expect(rejoined.type).toBe("joined");
+
+    await closeSocket(quickRejoin);
+    await delay(30);
+
+    const lateRejoin = await connect(server.url());
+    clients.push(lateRejoin);
+    lateRejoin.send(JSON.stringify({ type: "join_room", room_code: created.room_code, player: "player_1" }));
+    expect(await nextMessage(lateRejoin)).toEqual({ type: "error", message: "Room not found" });
   });
 
   it("rejects wrong socket/player actions and broadcasts accepted snapshots", async () => {
@@ -98,6 +194,8 @@ describe("HollowGridServer WebSocket protocol", () => {
     const playerTwoNotified = await nextMessage(playerTwo);
     expect(playerOneNotified.type).toBe("player_joined");
     expect(playerTwoNotified.type).toBe("player_joined");
+    await expectPresence(playerOne, ["player_1", "player_2"]);
+    await expectPresence(playerTwo, ["player_1", "player_2"]);
 
     playerTwo.send(
       JSON.stringify({
@@ -198,6 +296,29 @@ function nextMessage(socket: WebSocket): Promise<ServerMessage> {
     };
 
     inbox.waiters.push(waiter);
+  });
+}
+
+async function expectPresence(socket: WebSocket, connectedPlayers: string[]): Promise<void> {
+  const presence = await nextMessage(socket);
+  expect(presence.type).toBe("presence_updated");
+  if (presence.type !== "presence_updated") throw new Error("Expected presence_updated");
+  expect(presence.players).toEqual(["player_1", "player_2"]);
+  expect(presence.connected_players).toEqual(connectedPlayers);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function closeSocket(socket: WebSocket): Promise<void> {
+  if (socket.readyState === WebSocket.CLOSED) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    socket.once("close", () => resolve());
+    socket.close();
   });
 }
 

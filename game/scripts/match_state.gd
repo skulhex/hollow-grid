@@ -23,7 +23,7 @@ const CONNECTION_ACTIONS_PER_TURN := 1
 const REPAIR_ACTIONS_PER_TURN := 1
 const NODE_ROLE_ACTION_CHARGES_PER_TURN := 1
 const HARVESTER_RESOURCE_GAIN := 1
-const HARVESTER_UPGRADE_RESOURCE_COST := 1
+const HARVESTER_UPGRADE_RESOURCE_COST := 0
 const STRIKER_UPGRADE_RESOURCE_COST := 1
 const DEFENDER_UPGRADE_RESOURCE_COST := 1
 const HACKER_UPGRADE_RESOURCE_COST := 1
@@ -380,7 +380,9 @@ func can_target_action_shape(action_type: String, cell: Vector2i) -> bool:
 			return can_break_node(cell)
 		GameAction.TYPE_CLEAR_NODE:
 			return can_clear_node(cell)
-		GameAction.TYPE_UPGRADE_HARVESTER, GameAction.TYPE_UPGRADE_STRIKER, GameAction.TYPE_UPGRADE_DEFENDER, GameAction.TYPE_UPGRADE_HACKER:
+		GameAction.TYPE_UPGRADE_HARVESTER:
+			return _can_upgrade_node_to_role(current_player, cell, NODE_HARVESTER)
+		GameAction.TYPE_UPGRADE_STRIKER, GameAction.TYPE_UPGRADE_DEFENDER, GameAction.TYPE_UPGRADE_HACKER:
 			return can_upgrade_node(cell)
 		GameAction.TYPE_BUILD_CONNECTION_MODULE, GameAction.TYPE_BUILD_REPAIR_MODULE:
 			return can_build_module(cell)
@@ -691,7 +693,7 @@ func _apply_clear_node(action: GameAction) -> Dictionary:
 
 
 func _apply_upgrade_node(action: GameAction, role: String) -> Dictionary:
-	if not can_upgrade_node(action.cell):
+	if not _can_upgrade_node_to_role(current_player, action.cell, role):
 		status_message = "%s cannot upgrade that node" % GameDefs.player_label(current_player)
 		return _result(false, status_message, action)
 
@@ -970,6 +972,16 @@ func _can_upgrade_node(player: String, cell: Vector2i) -> bool:
 		return false
 
 	return object.get("role", NODE_CONDUIT) == NODE_CONDUIT
+
+
+func _can_upgrade_node_to_role(player: String, cell: Vector2i, role: String) -> bool:
+	if not _can_upgrade_node(player, cell):
+		return false
+
+	if role == NODE_HARVESTER:
+		return _are_neighbors(cell, CONTROL_POINT)
+
+	return true
 
 
 func _can_select_striker_source(player: String, cell: Vector2i) -> bool:

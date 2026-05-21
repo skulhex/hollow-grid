@@ -1,6 +1,6 @@
 import { createServer, type Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { PLAYER_ONE, PLAYER_TWO, isPlayerId } from "../game/constants.js";
+import { PLAYER_ONE, PLAYER_TWO, PLAYERS, isPlayerId } from "../game/constants.js";
 import { isPublicActionType, isValidPublicActionShape, parseAction } from "../game/gameAction.js";
 import { MatchState } from "../game/matchState.js";
 import type { PlayerId, Snapshot } from "../game/types.js";
@@ -16,6 +16,7 @@ interface Room {
   code: string;
   state: MatchState;
   players: Partial<Record<PlayerId, ClientSession>>;
+  emptyTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface HollowGridServerOptions {
@@ -23,13 +24,21 @@ export interface HollowGridServerOptions {
   host?: string;
 }
 
+export interface HollowGridServerConfig {
+  roomEmptyTtlMs?: number;
+}
+
 export class HollowGridServer {
+  private static readonly DEFAULT_ROOM_EMPTY_TTL_MS = 15 * 60 * 1000;
+
   private readonly httpServer: HttpServer;
   private readonly wss: WebSocketServer;
   private readonly rooms = new Map<string, Room>();
   private readonly sessions = new Map<WebSocket, ClientSession>();
+  private readonly roomEmptyTtlMs: number;
 
-  constructor() {
+  constructor(config: HollowGridServerConfig = {}) {
+    this.roomEmptyTtlMs = config.roomEmptyTtlMs ?? HollowGridServer.DEFAULT_ROOM_EMPTY_TTL_MS;
     this.httpServer = createServer((request, response) => {
       if (request.url === "/healthz") {
         response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
@@ -65,6 +74,10 @@ export class HollowGridServer {
   }
 
   close(): Promise<void> {
+    for (const room of this.rooms.values()) {
+      this.clearRoomEmptyTimer(room);
+    }
+
     for (const socket of this.sessions.keys()) {
       socket.close();
     }
@@ -123,7 +136,7 @@ export class HollowGridServer {
         this.createRoom(session);
         return;
       case "join_room":
-        this.joinRoom(session, message.room_code);
+        this.joinRoom(session, message.room_code, message.player);
         return;
       case "action":
         this.handleAction(session, message.action);
@@ -157,7 +170,7 @@ export class HollowGridServer {
     });
   }
 
-  private joinRoom(session: ClientSession, rawRoomCode: string): void {
+  private joinRoom(session: ClientSession, rawRoomCode: string, preferredPlayer?: PlayerId): void {
     if (session.roomCode) {
       this.send(session, { type: "error", message: "Socket is already in a room" });
       return;
@@ -171,27 +184,35 @@ export class HollowGridServer {
       return;
     }
 
-    if (room.players[PLAYER_TWO]) {
+    if (preferredPlayer && room.players[preferredPlayer]) {
+      this.send(session, { type: "error", message: "Player already connected" });
+      return;
+    }
+
+    const player = this.selectJoinPlayer(room, preferredPlayer);
+    if (!player) {
       this.send(session, { type: "error", message: "Room is full" });
       return;
     }
 
+    this.clearRoomEmptyTimer(room);
     session.roomCode = roomCode;
-    session.player = PLAYER_TWO;
-    room.players[PLAYER_TWO] = session;
+    session.player = player;
+    room.players[player] = session;
 
     const snapshot = room.state.toSnapshot();
     this.send(session, {
       type: "joined",
       room_code: roomCode,
-      player: PLAYER_TWO,
+      player,
       snapshot
     });
     this.broadcast(room, {
       type: "player_joined",
-      players: [PLAYER_ONE, PLAYER_TWO],
+      players: this.connectedPlayers(room),
       snapshot
     });
+    this.broadcastPresence(room);
   }
 
   private handleAction(session: ClientSession, rawAction: unknown): void {
@@ -237,8 +258,11 @@ export class HollowGridServer {
     delete room.players[session.player];
 
     if (!room.players[PLAYER_ONE] && !room.players[PLAYER_TWO]) {
-      this.rooms.delete(room.code);
+      this.scheduleRoomExpiration(room);
+      return;
     }
+
+    this.broadcastPresence(room);
   }
 
   private sessionRoom(session: ClientSession): Room | undefined {
@@ -248,6 +272,15 @@ export class HollowGridServer {
 
   private broadcastSnapshot(room: Room, snapshot: Snapshot): void {
     this.broadcast(room, { type: "snapshot", snapshot });
+  }
+
+  private broadcastPresence(room: Room): void {
+    this.broadcast(room, {
+      type: "presence_updated",
+      players: [...PLAYERS],
+      connected_players: this.connectedPlayers(room),
+      snapshot: room.state.toSnapshot()
+    });
   }
 
   private broadcast(room: Room, message: ServerMessage): void {
@@ -262,6 +295,37 @@ export class HollowGridServer {
     if (session.socket.readyState === WebSocket.OPEN) {
       session.socket.send(JSON.stringify(message));
     }
+  }
+
+  private selectJoinPlayer(room: Room, preferredPlayer?: PlayerId): PlayerId | undefined {
+    if (preferredPlayer) {
+      return room.players[preferredPlayer] ? undefined : preferredPlayer;
+    }
+
+    if (room.players[PLAYER_ONE] && !room.players[PLAYER_TWO]) return PLAYER_TWO;
+    if (!room.players[PLAYER_ONE]) return PLAYER_ONE;
+    if (!room.players[PLAYER_TWO]) return PLAYER_TWO;
+    return undefined;
+  }
+
+  private connectedPlayers(room: Room): PlayerId[] {
+    return PLAYERS.filter((player) => Boolean(room.players[player]));
+  }
+
+  private scheduleRoomExpiration(room: Room): void {
+    this.clearRoomEmptyTimer(room);
+    room.emptyTimer = setTimeout(() => {
+      if (!room.players[PLAYER_ONE] && !room.players[PLAYER_TWO]) {
+        this.rooms.delete(room.code);
+      }
+    }, this.roomEmptyTtlMs);
+    room.emptyTimer.unref?.();
+  }
+
+  private clearRoomEmptyTimer(room: Room): void {
+    if (!room.emptyTimer) return;
+    clearTimeout(room.emptyTimer);
+    room.emptyTimer = undefined;
   }
 
   private generateRoomCode(): string {

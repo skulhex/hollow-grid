@@ -6,6 +6,7 @@ signal disconnected
 signal room_created(room_code: String, player: String, snapshot: Dictionary)
 signal joined(room_code: String, player: String, snapshot: Dictionary)
 signal player_joined(players: Array, snapshot: Dictionary)
+signal presence_updated(players: Array, connected_players: Array, snapshot: Dictionary)
 signal snapshot_received(snapshot: Dictionary)
 signal error_received(message: String)
 signal connection_status_changed(status_text: String)
@@ -44,11 +45,16 @@ func create_room() -> int:
 	})
 
 
-func join_room(room_code: String) -> int:
-	return _send_message({
+func join_room(room_code: String, player: String = "") -> int:
+	var message := {
 		"type": "join_room",
 		"room_code": room_code.strip_edges().to_upper(),
-	})
+	}
+
+	if not player.strip_edges().is_empty():
+		message["player"] = player.strip_edges()
+
+	return _send_message(message)
 
 
 func send_action(action_payload: Dictionary) -> int:
@@ -130,6 +136,12 @@ func _handle_packet(text: String) -> void:
 		"player_joined":
 			player_joined.emit(
 				_array_value(message, "players"),
+				_dictionary_value(message, "snapshot")
+			)
+		"presence_updated":
+			presence_updated.emit(
+				_array_value(message, "players"),
+				_array_value(message, "connected_players"),
 				_dictionary_value(message, "snapshot")
 			)
 		"snapshot":

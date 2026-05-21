@@ -342,7 +342,7 @@ export class MatchState {
   }
 
   private applyUpgradeNode(action: NormalizedAction, role: NodeRole): ApplyResult {
-    if (!this.canUpgradeNode(action.cell)) {
+    if (!this.canUpgradeNodeToRole(this.currentPlayer, action.cell, role)) {
       this.statusMessage = `${playerLabel(this.currentPlayer)} cannot upgrade that node`;
       return this.result(false, this.statusMessage, action);
     }
@@ -621,6 +621,12 @@ export class MatchState {
     if (object.disabled) return false;
     if (!object.active) return false;
     return object.role === NODE_CONDUIT;
+  }
+
+  private canUpgradeNodeToRole(player: PlayerId, cell: Cell, role: NodeRole): boolean {
+    if (!this.canUpgradeNodeForPlayer(player, cell)) return false;
+    if (role === NODE_HARVESTER) return this.areNeighbors(cell, CONTROL_POINT);
+    return true;
   }
 
   private canSelectStrikerSource(player: PlayerId, cell: Cell): boolean {

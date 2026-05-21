@@ -60,7 +60,24 @@ describe("MatchState", () => {
     expect(snapshot.status_message).toBe("Player 1 ended turn. Upkeep: Player 2 ready");
   });
 
-  it("applies upgrade costs and readies role nodes on the next owner upkeep", () => {
+  it("makes Harvester upgrades free and keeps other role upgrades paid", () => {
+    const state = new MatchState();
+
+    expect(state.applyAction(action("place_node", "player_1", { q: -2, r: 0 })).ok).toBe(true);
+    const tooFar = state.applyAction(action("upgrade_harvester", "player_1", { q: -2, r: 0 }));
+    expect(tooFar.ok).toBe(false);
+    expect(tooFar.snapshot.resources.player_1).toBe(1);
+
+    skip(state, "player_1");
+    skip(state, "player_2");
+
+    expect(state.applyAction(action("place_node", "player_1", { q: -1, r: 0 })).ok).toBe(true);
+    const harvester = state.applyAction(action("upgrade_harvester", "player_1", { q: -1, r: 0 }));
+    expect(harvester.ok).toBe(true);
+    expect(harvester.snapshot.resources.player_1).toBe(1);
+  });
+
+  it("applies paid role upgrade costs and readies role nodes on the next owner upkeep", () => {
     const state = new MatchState();
 
     expect(state.applyAction(action("place_node", "player_1", { q: -2, r: 0 })).ok).toBe(true);
@@ -95,7 +112,7 @@ describe("MatchState", () => {
     skip(state, "player_1");
     skip(state, "player_2");
 
-    expect(state.toSnapshot().resources.player_1).toBe(1);
+    expect(state.toSnapshot().resources.player_1).toBe(2);
 
     while (state.toSnapshot().resources.player_1 < 5) {
       skip(state, "player_1");
