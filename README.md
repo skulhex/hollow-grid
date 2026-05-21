@@ -104,12 +104,11 @@ templates. `dist/` — генерируемый артефакт, его не н
 
 ## Документация
 
-- [MVP](docs/mvp.md) — ближайшая реализуемая версия правил и критерии готовности.
-- [GDD](docs/gdd.md) — дизайн-направление игры, долгосрочная модель и будущие расширения.
+- [GDD](docs/gdd.md) — дизайн-направление игры, текущие правила и будущие расширения.
 - [Protocol](docs/protocol.md) — сетевой формат `Action` и `Snapshot`.
 - [Deploy](docs/deploy.md) — локальный Docker preview, GHCR images и production deploy через Apache.
 
-## WebSocket MVP flow
+## WebSocket room flow
 
 Первый клиент создаёт комнату:
 

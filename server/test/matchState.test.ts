@@ -3,7 +3,7 @@ import { MatchState } from "../src/game/matchState.js";
 import type { ActionPayload, Cell, PlayerId } from "../src/game/types.js";
 
 describe("MatchState", () => {
-  it("creates the initial MVP snapshot", () => {
+  it("creates the initial match snapshot", () => {
     const state = new MatchState();
     const snapshot = state.toSnapshot();
 
